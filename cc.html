@@ -1352,8 +1352,6 @@ function animate() {
         let gravityMult = 1.0;
         if (isSliding) {
             if (isDive) gravityMult = 1.75; // Only dives get heavy sliding gravity
-        } else if (cubeBoostTimer > 0 && !isSlideJump) {
-            gravityMult = 1.75; // Parry boost gravity, unless it's a slide-jump
         }
         velocity.y -= GRAVITY * gravityMult * dt;
     }
@@ -1697,20 +1695,22 @@ function animate() {
             cubeBoostTimer = 2.5; // 2.5 second speed boost on collection
 
             // Parry-style fling: launch the player in the direction they are looking
-            // Now significantly rewards vertical speed (diving) for massive launches
+            // Now significantly rewards vertical speed (diving) for massive horizontal launches
             const parryBase = 45.0;
             const currentHSpeed = new THREE.Vector2(velocity.x, velocity.z).length();
             const fallSpeed = Math.max(0, -velocity.y); // Capture downward momentum
-            const launchMag = parryBase + (currentHSpeed * 1.5) + (fallSpeed * 5.0);
-            camera.getWorldDirection(tmpToPlayer);
-            velocity.copy(tmpToPlayer).multiplyScalar(launchMag);
 
-            // Guarantee upward momentum: ensure Y-velocity is at least 65% of the total launch power
-            velocity.y = Math.max(velocity.y, launchMag * 0.65);
+            // Calculate the horizontal launch magnitude, incorporating fallSpeed
+            const horizontalLaunchMag = parryBase + (currentHSpeed * 1.5) + (fallSpeed * 10.0);
+
+            camera.getWorldDirection(tmpToPlayer);
+            const horizontalCameraDir = new THREE.Vector3(tmpToPlayer.x, 0, tmpToPlayer.z).normalize();
+            velocity.x = horizontalCameraDir.x * horizontalLaunchMag;
+            velocity.z = horizontalCameraDir.z * horizontalLaunchMag;
+            velocity.y = JUMP_FORCE * 1.5; // Set vertical velocity to a fixed jump force
 
             isGrounded = false;
             isSliding = false;
-            isSlideJump = false; // Parries override the slide-jump gravity reset
             canDoubleJump = true; // Refresh jump as a reward
 
             updateCurse();
