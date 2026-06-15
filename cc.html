@@ -1,0 +1,1930 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RED CUBE COLLECTOR</title>
+    <link rel="icon" href="data:,">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { overflow: hidden; background: #1a1a1a; font-family: monospace; }
+        #crosshair {
+            position: fixed; top: 50%; left: 50%;
+            width: 8px; height: 8px;
+            background: rgba(255,255,255,0.8);
+            border-radius: 50%;
+            transform: translate(-50%,-50%);
+            pointer-events: none;
+            z-index: 10;
+        }
+        #loading-screen {
+            position: fixed; inset: 0; background: #000;
+            display: none; flex-direction: column; align-items: center; justify-content: center;
+            z-index: 2000; color: #ff0000; font-family: monospace;
+        }
+        #loading-bar-outer { width: 240px; height: 4px; background: #111; margin-top: 20px; border: 1px solid #333; }
+        #loading-bar-inner { width: 0%; height: 100%; background: #ff0000; box-shadow: 0 0 10px #ff0000; transition: width 0.1s; }
+        #loading-status { font-size: 10px; color: #666; margin-top: 12px; letter-spacing: 2px; text-transform: uppercase; }
+        
+        @keyframes pulse-screen { 0% { background-color: #000; } 50% { background-color: #100000; } 100% { background-color: #000; } }
+        @keyframes pulse-bar { 0% { box-shadow: 0 0 10px #ff0000; filter: brightness(1); } 50% { box-shadow: 0 0 25px #ff0000; filter: brightness(1.8); } 100% { box-shadow: 0 0 10px #ff0000; filter: brightness(1); } }
+
+        #instructions {
+            position: fixed; top: 50%; left: 50%;
+            transform: translate(-50%,-50%);
+            color: #fff; text-align: center;
+            background: rgba(0,0,0,0.92);
+            padding: 36px 44px; border-radius: 8px;
+            cursor: pointer; user-select: none;
+            border: 1px solid #333;
+            z-index: 100;
+        }
+        #instructions h2 { font-size: 26px; letter-spacing: 4px; color: #ff0000; margin-bottom: 12px; text-shadow: 0 0 5px #ff0000; }
+        #instructions p { font-size: 13px; color: #aaaaaa; line-height: 1.8; }
+        #instructions .start { font-size: 18px; color: #00ff00; margin: 16px 0 8px; letter-spacing: 2px; text-shadow: 0 0 5px #00ff00; }
+
+        #pause-menu {
+            position: fixed; top: 50%; left: 50%;
+            transform: translate(-50%,-50%);
+            color: #fff; text-align: center;
+            background: rgba(0,0,0,0.95);
+            padding: 40px 60px; border-radius: 4px;
+            display: none; border: 1px solid #ff0000;
+            z-index: 1000; box-shadow: 0 0 30px rgba(255,0,0,0.2);
+        }
+        #pause-menu h2 { color: #ff0000; margin-bottom: 25px; letter-spacing: 6px; text-shadow: 0 0 10px #ff0000; }
+        .menu-btn {
+            display: block; width: 200px; padding: 12px; margin: 10px auto;
+            background: #000; border: 1px solid #ff0000; color: #ff0000;
+            cursor: pointer; font-family: monospace; font-size: 14px;
+            letter-spacing: 2px; transition: 0.2s;
+        }
+        .menu-btn:hover { background: #ff0000; color: #000; }
+
+        #ui {
+            position: fixed; bottom: 18px; left: 18px;
+            color: #00ff00; font-family: monospace; font-size: 15px;
+            background: rgba(0,0,0,0.7); padding: 10px 14px; border-radius: 4px;
+            z-index: 10; line-height: 1.8;
+        }
+        #curse-msg {
+            position: fixed; top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            color: #ff0000; font-size: 28px; font-weight: bold;
+            text-align: center; pointer-events: none;
+            text-shadow: 0 0 10px #ff0000, 0 0 20px #ff0000;
+            opacity: 0; z-index: 50;
+            letter-spacing: 2px;
+            transition: opacity 0.4s;
+        }
+        #vignette {
+            position: fixed; inset: 0; pointer-events: none; z-index: 5;
+            background: radial-gradient(ellipse at center, transparent 55%, rgba(50,0,0,0) 100%);
+            transition: background 1s;
+        }
+        #win-screen {
+            position: fixed; inset: 0; background: #000;
+            display: none; align-items: center; justify-content: center;
+            flex-direction: column; color: #ff0000; text-align: center; z-index: 200;
+        }
+        #win-screen h1 { font-size: 48px; letter-spacing: 6px; animation: flicker 0.3s infinite; }
+        #win-screen p { font-size: 16px; color: #888; margin-top: 20px; }
+        
+        #jumpscare-overlay {
+            position: fixed; inset: 0; background: #000;
+            display: none; align-items: center; justify-content: center;
+            z-index: 9999; pointer-events: none;
+        }
+        #jumpscare-overlay img {
+            max-height: 100vh; max-width: 100vw;
+            object-fit: contain;
+        }
+
+        #speed-container {
+            position: fixed; top: 25px; right: 25px;
+            width: 240px; z-index: 10;
+            font-family: 'Impact', sans-serif;
+            pointer-events: none;
+            display: block;
+            text-align: right;
+        }
+        #mach-text {
+            font-size: 48px; font-weight: 900; font-style: italic;
+            color: #fff; text-shadow: 4px 4px #000, 0 0 20px rgba(255,255,255,0.4);
+            margin-bottom: -5px; letter-spacing: 2px;
+            transform: skewX(-10deg);
+            transition: transform 0.1s, color 0.2s;
+        }
+        #speed-bar-bg { width: 100%; height: 16px; background: rgba(0,0,0,0.9); border: 3px solid #fff; overflow: hidden; transform: skewX(-15deg); box-shadow: 5px 5px 0px #000; }
+        #speed-bar-fill { width: 0%; height: 100%; background: #fff; transition: width 0.05s; box-shadow: 0 0 20px currentColor; }
+        
+        @keyframes mach-shake { 0% { transform: translate(0,0); } 25% { transform: translate(2px, -2px); } 50% { transform: translate(-2px, 1px); } 75% { transform: translate(1px, -1px); } 100% { transform: translate(0,0); } }
+        
+        @keyframes flicker { 0%,100%{opacity:1} 50%{opacity:0.3} }
+    </style>
+</head>
+<body>
+<div id="crosshair"></div>
+<div id="vignette"></div>
+<div id="curse-msg"></div>
+<div id="loading-screen">
+    <h2 style="letter-spacing: 8px; margin-bottom: 10px;">PREPARING VOID</h2>
+    <div id="loading-bar-outer"><div id="loading-bar-inner"></div></div>
+    <div id="loading-status">Initializing systems...</div>
+</div>
+<div id="instructions">
+    <h2>RED CUBE COLLECTOR</h2>
+    <div class="start" style="margin-bottom: 5px;">Click to Begin</div>
+    <button class="menu-btn" onclick="openSettings(event)" style="width: 140px; margin: 0 auto 15px; font-size: 11px; padding: 6px;">SETTINGS</button>
+    <p id="binds-text">WASD — Move &nbsp;|&nbsp; Space — Jump &nbsp;|&nbsp; Shift — Sprint<br>
+    Collect all 20 red cubes<br>
+    Follow the golden beacons<br><br>
+    <span style="color:#555; font-size:11px;">something is out there. don't worry about it.</span></p>
+</div>
+<div id="pause-menu">
+    <h2>PAUSED</h2>
+    <button class="menu-btn" onclick="resumeGame()">RESUME</button>
+    <button class="menu-btn" onclick="openSettings(event)">SETTINGS</button>
+    <button class="menu-btn" onclick="location.reload()">MAIN MENU</button>
+</div>
+<div id="settings-menu" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.95); z-index:2100; flex-direction:column; align-items:center; justify-content:center; color:#ff0000; font-family:monospace; border:1px solid #ff0000;">
+    <h2 style="letter-spacing:6px; text-shadow:0 0 10px #ff0000; margin-bottom:20px;">KEYBINDINGS</h2>
+    <div id="bind-list" style="margin-bottom:20px; text-align:left; width:320px; background: rgba(20,0,0,0.5); padding: 20px; border: 1px solid #300;"></div>
+    <div style="width: 320px; margin-bottom: 20px; text-align: left;">
+        <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+            <span style="color: #aaa; font-size: 12px;">MOUSE SENSITIVITY</span>
+            <span id="sens-val" style="font-size: 12px;">1.0</span>
+        </div>
+        <input type="range" id="sens-slider" min="0.1" max="5.0" step="0.1" value="1.0" style="width: 100%; cursor: pointer; accent-color: #ff0000;">
+    </div>
+    <p style="font-size: 10px; color: #666; margin-bottom: 20px;">CLICK AN ACTION THEN PRESS A KEY</p>
+    <button class="menu-btn" onclick="resetToDefaults()" style="margin-bottom: 5px;">RESET TO DEFAULTS</button>
+    <button class="menu-btn" onclick="closeSettings()">BACK</button>
+</div>
+<div id="speed-container">
+    <div id="mach-text">MACH 1</div>
+    <div id="speed-bar-bg"><div id="speed-bar-fill"></div></div>
+</div>
+<div id="ui">Cubes: 0 / 20</div>
+<div id="win-screen">
+    <h1>YOU COLLECTED THEM ALL</h1>
+    <p id="win-sub">...</p>
+</div>
+
+<div id="jumpscare-overlay">
+    <img src="death_screen.jpeg" alt="RUN">
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+// ===================== AUDIO =====================
+let audioCtx = null;
+let masterGain, distortionNode, reverbNode;
+let monsterMusicBuffer = null;
+let monsterMusicSource = null;
+let musicLoadPromise = null;
+
+function initAudio() {
+    if (audioCtx) return;
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    masterGain = audioCtx.createGain();
+    masterGain.gain.value = 1.0;
+
+    distortionNode = audioCtx.createWaveShaper();
+    distortionNode.curve = makeDistortionCurve(0);
+    distortionNode.oversample = '4x';
+
+    reverbNode = audioCtx.createConvolver();
+    buildReverb(0.3);
+
+    distortionNode.connect(reverbNode);
+    reverbNode.connect(masterGain);
+    masterGain.connect(audioCtx.destination);
+
+    // Load and decode the chase music, store promise for loading screen
+    musicLoadPromise = fetch('OFF WITH YOUR HEAD [MAX SEVERITY] - Grace UST-(123k).mp3')
+        .then(res => res.arrayBuffer())
+        .then(data => audioCtx.decodeAudioData(data))
+        .then(buf => {
+            monsterMusicBuffer = buf;
+            if (cubesCollected >= 15) playMonsterMusic();
+        })
+        .catch(e => console.warn("Monster music failed to load:", e));
+}
+
+function makeDistortionCurve(amount) {
+    const n = 256, curve = new Float32Array(n);
+    for (let i = 0; i < n; i++) {
+        const x = (i * 2) / n - 1;
+        curve[i] = amount === 0 ? x : ((Math.PI + amount) * x) / (Math.PI + amount * Math.abs(x));
+    }
+    return curve;
+}
+
+// Reverb building can be expensive and cause frame hitches when invoked
+// synchronously during gameplay (e.g. on cube pickup). Cache generated buffers
+// and schedule heavy work to run during idle time.
+const reverbCache = new Map();
+let _reverbNoise = null;
+let _scheduledReverbKey = null;
+let _activeReverbKey = null;
+
+function buildReverbNow(dur) {
+    if (!audioCtx || !reverbNode) return;
+    // Snap duration to 0.1s increments to ensure we hit the pre-baked cache
+    const clamped = Math.round(Math.max(0.1, Math.min(dur, 1.0)) * 10) / 10;
+    const key = Math.round(clamped * 10);
+    
+    if (_activeReverbKey === key) return;
+    if (reverbCache.has(key)) {
+        reverbNode.buffer = reverbCache.get(key);
+        _activeReverbKey = key;
+        return;
+    }
+    
+    const len = Math.floor(audioCtx.sampleRate * clamped);
+    const buf = audioCtx.createBuffer(2, len, audioCtx.sampleRate);
+    if (!_reverbNoise) {
+        _reverbNoise = new Float32Array(audioCtx.sampleRate);
+        for (let i = 0; i < _reverbNoise.length; i++) _reverbNoise[i] = Math.random() * 2 - 1;
+    }
+    for (let c = 0; c < 2; c++) {
+        const d = buf.getChannelData(c);
+        const off = c * 1024;
+        for (let i = 0; i < len; i++) {
+            const decay = 1 - i / len;
+            d[i] = _reverbNoise[(i + off) % _reverbNoise.length] * decay * decay;
+        }
+    }
+    reverbCache.set(key, buf);
+    reverbNode.buffer = buf;
+    _activeReverbKey = key;
+}
+
+function scheduleBuildReverb(dur) {
+    // Since we pre-bake everything in the loading screen, we can call this immediately
+    buildReverbNow(dur);
+}
+
+function buildReverb(dur) {
+    scheduleBuildReverb(dur);
+}
+
+function getOutput() { return distortionNode || audioCtx.destination; }
+
+function playTone(freq, type, dur, vol, freqEnd) {
+    if (!audioCtx) return;
+    const osc = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq * (1 + curseFactor * 0.4 * (Math.random()-0.5)), audioCtx.currentTime);
+    if (freqEnd) osc.frequency.exponentialRampToValueAtTime(freqEnd, audioCtx.currentTime + dur);
+    g.gain.setValueAtTime(vol, audioCtx.currentTime);
+    g.gain.linearRampToValueAtTime(0.001, audioCtx.currentTime + dur);
+    osc.connect(g); g.connect(getOutput());
+    osc.start(); osc.stop(audioCtx.currentTime + dur);
+}
+
+function playNoise(dur, vol, filterFreq) {
+    if (!audioCtx) return;
+    const len = Math.floor(audioCtx.sampleRate * dur);
+    const buf = audioCtx.createBuffer(1, len, audioCtx.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = Math.random()*2-1;
+    const src = audioCtx.createBufferSource(); src.buffer = buf;
+    const f = audioCtx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = filterFreq;
+    const g = audioCtx.createGain(); g.gain.setValueAtTime(vol, audioCtx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur);
+    src.connect(f); f.connect(g); g.connect(getOutput());
+    src.start();
+}
+
+function playJump() { playTone(140 + curseFactor*60, 'triangle', 0.18, 0.13, 300 + curseFactor*100); }
+function playLand() { playNoise(0.12, 0.12, 150 + curseFactor*200); }
+function playStep(v=0.05) { playTone(55 + curseFactor*30*(Math.random()-0.5), 'sine', 0.09, v); }
+
+function playCollect(n) {
+    if (!audioCtx) return;
+    const baseFreq = 440 + n * 30;
+    playTone(baseFreq, 'triangle', 0.15, 0.18, baseFreq*1.5);
+    setTimeout(() => playTone(baseFreq*1.5, 'sine', 0.2, 0.12), 100);
+    if (n > 5) {
+        setTimeout(() => playTone(baseFreq * 0.5 * (0.8 + Math.random()*0.4), 'sawtooth', 0.3, 0.08), 50);
+    }
+}
+
+function playMonsterSound() {
+    if (!audioCtx || curseFactor < 0.8) return;
+    const f = 60 + Math.random()*40;
+    playTone(f, 'sawtooth', 0.4 + Math.random()*0.4, 0.06 + curseFactor*0.05);
+}
+
+function playMonsterMusic() {
+    if (!monsterMusicBuffer || monsterMusicSource || !audioCtx) return;
+    monsterMusicSource = audioCtx.createBufferSource();
+    monsterMusicSource.buffer = monsterMusicBuffer;
+    monsterMusicSource.loop = true;
+    monsterMusicSource.connect(masterGain);
+    monsterMusicSource.start();
+}
+
+function playAmbientDrone() {
+    if (!audioCtx || curseFactor < 0.3) return;
+    const f = 30 + curseFactor * 20;
+    playTone(f, 'sine', 2.0, 0.04 * curseFactor);
+    if (curseFactor > 0.6) playTone(f * 1.008, 'sawtooth', 2.5, 0.03 * curseFactor);
+}
+
+// ===================== SCENE =====================
+const scene = new THREE.Scene(); //
+const skyColor = new THREE.Color(0x87CEEB); // Sky blue color
+scene.background = skyColor;
+scene.fog = new THREE.FogExp2(0x87CEEB, 0.0); // Start with no fog
+
+const camera = new THREE.PerspectiveCamera(75, innerWidth/innerHeight, 0.1, 2000);
+const player = new THREE.Object3D();
+player.position.set(0, 2, 0);
+player.add(camera);
+scene.add(player); //
+
+const renderer = new THREE.WebGLRenderer({ antialias: false });
+// cap pixel ratio to avoid rendering at very high resolutions on hi-dpi displays
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.25));
+renderer.setSize(innerWidth, innerHeight);
+// disable shadows for better performance (toggle on if needed)
+renderer.debug.checkShaderErrors = false;
+renderer.shadowMap.enabled = false;
+document.body.appendChild(renderer.domElement);
+ //
+const ambientLight = new THREE.AmbientLight(0xffffff, 0.8); // Slightly lower ambient
+scene.add(ambientLight);
+const sunLight = new THREE.DirectionalLight(0xfff5e0, 1.2); // Stronger directional sun
+sunLight.position.set(80, 150, 60);
+scene.add(sunLight);
+
+// ===================== WORLD =====================
+const obstacles = [];
+const obstacleBoxes = []; // precomputed static boxes
+const MAP_SIZE = 2000; // Large expanded world
+
+const textureLoader = new THREE.TextureLoader();
+const grassTex = textureLoader.load('grass.jpg');
+grassTex.wrapS = grassTex.wrapT = THREE.RepeatWrapping;
+grassTex.repeat.set(160, 160); // Scaled texture for larger map
+
+const stoneTex = textureLoader.load('stone.jpg');
+stoneTex.wrapS = stoneTex.wrapT = THREE.RepeatWrapping;
+
+const groundMat = new THREE.MeshLambertMaterial({ map: grassTex, color: 0x77cc77 }); // Lightened ground tint
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(MAP_SIZE, MAP_SIZE), groundMat); //
+ground.rotation.x = -Math.PI/2;
+ground.matrixAutoUpdate = false;
+ground.updateMatrix();
+ground.receiveShadow = true;
+scene.add(ground);
+
+function makeBox(w, h, d, x, y, z, color=0x7a96b0, name='') {
+    const geo = new THREE.BoxGeometry(w, h, d);
+    const mat = new THREE.MeshPhongMaterial({ map: stoneTex, color, emissive: 0x000000 });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.position.set(x, y + h/2, z);
+    mesh.matrixAutoUpdate = false;
+    mesh.updateMatrix();
+    mesh.userData.name = name;
+    scene.add(mesh);
+    obstacles.push(mesh);
+    return mesh;
+}
+
+makeBox(20, 1, 20, 0, 0, 0, 0x888888); // Start platform lightened
+
+// Randomize platform positions on each game load
+function randomizePlatformPositions(platforms) {
+    const mapSize = MAP_SIZE / 2 - 30;
+    return platforms.map(p => {
+        // p = [w, h, d, x, y, z, color, name]
+        const x = (Math.random() - 0.5) * mapSize * 2;
+        const z = (Math.random() - 0.5) * mapSize * 2;
+        return [p[0], p[1], p[2], x, p[4], z, p[6], p[7]];
+    });
+}
+
+// Define core obstacle patterns (simplified, reusable layouts)
+const OBSTACLE_PATTERNS = [
+    // ninja parckore
+    [[9, 20, 2, 0, -1, -4, 0xcccccc], [9, 20, 2, 0, -1, 7, 0xcccccc], [3, 1, 4, 3, 13, 4, 0xcccccc], [3, 1, 4, -3, 5, -1, 0xcccccc]],
+    // reversy
+    [[8, 1, 8, 0, 0, -1, 0x808080], [8, 1, 8, 0, 4, -13, 0x808080], [8, 1, 8, 0, 8, -10, 0x808080]],
+    // basic
+    [[6, 1, 9, 0, 0, 5, 0x808080], [6, 1, 9, 5, 3, -10, 0x808080], [6, 1, 9, -5, 6, -26, 0x808080]],
+    // pillars
+    [[3, 3, 3, 0, 0, 0, 0x808080], [3, 6, 3, -10, 0, 0, 0x808080], [3, 10, 3, -20, 0, 0, 0x808080]],
+    // wals
+    [[2, 12, 10, 0, 0, 0, 0x808080], [2, 12, 10, 10, 0, 0, 0x808080]],
+    // altor
+    [[4, 4, 4, -10, 0, 0, 0x808080], [4, 4, 4, 0, 0, 10, 0x808080], [4, 4, 4, 10, 0, 0, 0x808080], [4, 4, 4, 0, 0, -10, 0x808080], [6, 1, 6, 0, 6, 0, 0x808080]],
+    // poke
+    [[12, 1, 12, 0, 0, 0, 0x808080], [2, 6, 2, 0, 0, 0, 0x808080]],
+    // flat
+    [[12, 1, 12, 0, 0, 0, 0x808080]]
+];
+
+// Randomly select patterns and spread them across the map
+function generateObstacles(patterns, count = 20) {
+    const selectedPatterns = [];
+    const spacing = MAP_SIZE * 0.42; // Spread patterns across the new map scale
+    const minDistBetweenPatterns = 200; // ensure structures aren't on top of each other
+    const patternCenters = [];
+    
+    for (let i = 0; i < count; i++) {
+        const pattern = patterns[i % patterns.length];
+        
+        // generate random position with more spread
+        let angle, dist, baseX, baseZ;
+        let attempts = 0;
+        let positionValid = false;
+        
+        while (!positionValid && attempts < 10) {
+            angle = (i / count) * Math.PI * 2 + (Math.random() - 0.5) * 1.2; 
+            dist = spacing * (0.4 + Math.random() * 0.6); 
+            baseX = Math.cos(angle) * dist;
+            baseZ = Math.sin(angle) * dist;
+            
+            // check distance from other patterns
+            positionValid = true;
+            for (let pc of patternCenters) {
+                const dx = pc.x - baseX;
+                const dz = pc.z - baseZ;
+                const distToOther = Math.sqrt(dx*dx + dz*dz);
+                if (distToOther < minDistBetweenPatterns) {
+                    positionValid = false;
+                    break;
+                }
+            }
+            attempts++;
+        }
+        
+        patternCenters.push({ x: baseX, z: baseZ });
+        
+        // Find the highest point in this pattern to host the cube
+        let highestIdx = 0;
+        let maxY = -Infinity;
+        pattern.forEach((p, idx) => {
+            const topY = p[4] + p[1]; // y + height
+            if (topY > maxY) {
+                maxY = topY;
+                highestIdx = idx;
+            }
+        });
+
+        // offset each block and tag the highest one as the cube host
+        const offsetPattern = pattern.map((p, blockIdx) => [
+            p[0], p[1], p[2],
+            baseX + p[3],
+            p[4],
+            baseZ + p[5],
+            p[6], 
+            blockIdx === highestIdx ? 'CUBE_PLATFORM' : (p[7] || '')
+        ]);
+        
+        selectedPatterns.push(...offsetPattern);
+    }
+    
+    return selectedPatterns;
+}
+
+let randomizedPlatformData = generateObstacles(OBSTACLE_PATTERNS);
+const platformData = randomizedPlatformData;
+platformData.forEach(p => makeBox(...p));
+
+// precompute static obstacle boxes once
+const playerRadius = 0.4;
+function buildObstacleBoxes() {
+    obstacleBoxes.length = 0;
+    for (let i = 0; i < obstacles.length; i++) {
+        const b = new THREE.Box3().setFromObject(obstacles[i]);
+        // expand by player radius to simplify collision checks
+        b.min.x -= playerRadius; b.min.z -= playerRadius;
+        b.max.x += playerRadius; b.max.z += playerRadius;
+        obstacleBoxes.push(b);
+    }
+}
+buildObstacleBoxes();
+
+// ===================== CUBES & BEACONS =====================
+// Place cubes on top of randomly selected platforms
+function generateCubePositionsOnPlatforms(platforms, cubeCount = 20) {
+    // Find exactly one tagged host platform from each of the 20 structures
+    const hosts = platforms.filter(p => p[7] === 'CUBE_PLATFORM');
+    
+    return hosts.slice(0, cubeCount).map(p => {
+        // Place cube directly above the center of its unique obstacle
+        return [p[3], p[4] + p[1] + 1.2, p[5]];
+    });
+}
+
+const CUBE_POSITIONS = generateCubePositionsOnPlatforms(platformData, 20);
+
+const cubes = [];
+const beacons = [];
+const beaconRings = []; // kept for compatibility (not used for rendering rings anymore)
+// instanced rings
+let ringDescriptors = [];
+let ringInstanced = null;
+const ringDummy = new THREE.Object3D();
+
+const cubeMat = new THREE.MeshStandardMaterial({ color: 0xff0000, roughness: 0.2, metalness: 0.7, emissive: 0xff0000, emissiveIntensity: 3.0 }); // Brighter, more reflective cubes
+const cubeGeo = new THREE.BoxGeometry(1.2, 1.2, 1.2);
+
+// reuse beacon geometries
+const beaconCoreGeo = new THREE.CylinderGeometry(0.22, 0.22, 500, 8);
+const beaconGlowGeo = new THREE.CylinderGeometry(1.1, 1.1, 500, 12);
+const beaconRingGeo = new THREE.TorusGeometry(2.5, 0.18, 8, 24);
+
+CUBE_POSITIONS.forEach((pos, i) => {
+    const cube = new THREE.Mesh(cubeGeo, cubeMat.clone());
+    cube.position.set(...pos);
+    cube.castShadow = true;
+    cube.userData.index = i;
+    cube.userData.collected = false;
+    scene.add(cube);
+    cubes.push(cube);
+
+    const beaconGroup = new THREE.Group();
+    beaconGroup.position.set(pos[0], 0, pos[2]);
+    beaconGroup.matrixAutoUpdate = false;
+    beaconGroup.updateMatrix();
+
+    const coreMat = new THREE.MeshPhongMaterial({
+        color: 0xffffff, emissive: 0xffff00, emissiveIntensity: 3.0, // White core, yellow glow
+        transparent: true, opacity: 0.7, fog: false
+    });
+    const core = new THREE.Mesh(beaconCoreGeo, coreMat);
+    core.position.y = 250;
+    beaconGroup.add(core);
+
+    const glowMat = new THREE.MeshPhongMaterial({
+        color: 0xe3d356, emissive: 0xe3d356, emissiveIntensity: 3.5, fog: false,
+        transparent: true, opacity: 0.2, side: THREE.BackSide // Darker yellow glow, more transparent
+    }); //
+    const glow = new THREE.Mesh(beaconGlowGeo, glowMat);
+    glow.position.y = 250;
+    beaconGroup.add(glow);
+
+    const rings = [];
+    // reduce rings from 5 to 2 for performance; collect descriptors for instancing
+    [8, 25].forEach(h => {
+        const phase = Math.random() * Math.PI * 2;
+        ringDescriptors.push({ bx: pos[0], bz: pos[2], baseY: h, phase });
+        // keep placeholder entry for legacy array structure
+        rings.push(null);
+    });
+
+    scene.add(beaconGroup);
+    beacons.push(beaconGroup);
+    beaconRings.push(rings);
+});
+
+// create instanced mesh for rings once descriptors are collected
+if (ringDescriptors.length > 0) {
+    const totalRings = ringDescriptors.length;
+    const ringMatCommon = new THREE.MeshPhongMaterial({ color: 0xffffff, emissive: 0xffff00, emissiveIntensity: 2.0, transparent: true, opacity: 0.4, fog: false });
+    ringInstanced = new THREE.InstancedMesh(beaconRingGeo, ringMatCommon, totalRings);
+    ringInstanced.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    // set initial matrices
+    for (let ri = 0; ri < totalRings; ri++) {
+        const rd = ringDescriptors[ri];
+        ringDummy.position.set(rd.bx, rd.baseY, rd.bz);
+        ringDummy.rotation.x = Math.PI / 2;
+        ringDummy.scale.setScalar(1);
+        ringDummy.updateMatrix();
+        ringInstanced.setMatrixAt(ri, ringDummy.matrix);
+    }
+    ringInstanced.instanceMatrix.needsUpdate = true;
+    scene.add(ringInstanced);
+}
+
+// ===================== MONSTERS =====================
+const monsters = [];
+const MONSTER_SPEED_BASE = 5.5;
+let flashlight = null;
+let flashlightEnabled = false;
+
+function enableFlashlight() {
+    if (flashlight) return;
+    flashlight = new THREE.SpotLight(0xffffff, 4.0, 150, Math.PI * 0.2, 0.3, 1.2); 
+    flashlight.position.set(0, 0, 0);
+    const target = new THREE.Object3D();
+    target.position.set(0, 0, -5); // Target a point further ahead
+    camera.add(flashlight);
+    camera.add(target);
+    flashlight.target = target;
+    flashlightEnabled = true;
+}
+
+const sonicBooms = [];
+const sonicBoomGeo = new THREE.TorusGeometry(1, 0.1, 8, 32);
+const sonicBoomMatBase = new THREE.MeshBasicMaterial({ color: 0x00ffff, transparent: true, side: THREE.DoubleSide });
+
+function triggerSonicBoom(pos) {
+    const boom = new THREE.Mesh(sonicBoomGeo, sonicBoomMatBase.clone());
+    boom.position.copy(pos);
+    boom.position.y = 0.5; // Slightly above floor
+    boom.rotation.x = Math.PI / 2;
+    boom.userData.life = 0;
+    scene.add(boom);
+    sonicBooms.push(boom);
+    playNoise(0.4, 0.25, 80); // Low thud
+    playTone(60, 'sawtooth', 0.5, 0.2, 20); // Bass drop
+}
+
+function createMonster() {
+    // simplified low-poly monster to improve performance
+    const group = new THREE.Group();
+    const S = 3.0 + Math.random() * 1.0; //
+    const mat = new THREE.MeshPhongMaterial({ color: 0x330000, emissive: 0x100000, emissiveIntensity: 0.2 });
+    const body = new THREE.Mesh(new THREE.BoxGeometry(S * 1.2, S * 1.6, S * 0.8), mat);
+    body.position.y = S * 0.9;
+    group.add(body);
+
+    const eyeMat = new THREE.MeshPhongMaterial({ color: 0x000000, emissive: 0xff0000, emissiveIntensity: 1.0 });
+    const eyeL = new THREE.Mesh(new THREE.SphereGeometry(S * 0.12, 4, 4), eyeMat); // Simplest sphere
+    eyeL.position.set(-S * 0.22, S * 1.15, S * 0.36);
+    group.add(eyeL);
+    const eyeR = eyeL.clone(); eyeR.position.x *= -1; group.add(eyeR); //
+
+    const legMat = mat;
+    const legL = new THREE.Mesh(new THREE.CylinderGeometry(S * 0.12, S * 0.08, S * 0.9, 6), legMat);
+    legL.position.set(-S * 0.2, S * 0.0, 0);
+    group.add(legL);
+    const legR = legL.clone(); legR.position.x = S * 0.2; group.add(legR);
+
+    const angle = Math.random() * Math.PI * 2;
+    const dist = 200 + Math.random() * 150;
+    group.position.set(Math.cos(angle) * dist, 0, Math.sin(angle) * dist);
+    group.userData.groanTimer = Math.random() * 4;
+    group.userData.scale = S;
+    group.userData.limbPhase = Math.random() * Math.PI * 2;
+    group.visible = false;
+    scene.add(group);
+    monsters.push(group);
+    return group;
+}
+
+// ===================== CURSE SYSTEM =====================
+let cubesCollected = 0;
+let curseFactor = 0;
+let gameTime = 0;
+const curseMsg = document.getElementById('curse-msg');
+const vignette = document.getElementById('vignette');
+const ui = document.getElementById('ui');
+const winScreen = document.getElementById('win-screen');
+
+const curseMessages = {
+    1: "one down.",
+    3: "you feel a little cold.",
+    5: "the air feels wrong",
+    7: "STOP COLLECTING THEM",
+    9: "they were never meant to be found",
+    12: "something is behind you",
+    15: "THEY KNOW WHERE YOU ARE",
+    17: "RUN",
+    19: "please",
+    20: "IT'S TOO LATE"
+};
+
+function showCurseMsg(text, dur=2800) {
+    curseMsg.textContent = text;
+    curseMsg.style.opacity = '1';
+    curseMsg.style.fontSize = curseFactor > 0.7 ? (24 + Math.random()*20)+'px' : '26px';
+    setTimeout(() => { curseMsg.style.opacity = '0'; }, dur);
+}
+
+function updateCurse() {
+    curseFactor = cubesCollected / 20;
+
+    const skyR = Math.floor(THREE.MathUtils.lerp(0x87, 0x44, curseFactor)); 
+    const skyG = Math.floor(THREE.MathUtils.lerp(0xce, 0x00, curseFactor));
+    const skyB = Math.floor(THREE.MathUtils.lerp(0xeb, 0x00, curseFactor));
+    // avoid creating new Color instances each frame
+    scene.background.setRGB(skyR/255, skyG/255, skyB/255);
+    scene.fog.color.setRGB(skyR/255, skyG/255, skyB/255);
+    scene.fog.density = (cubesCollected <= 3) ? 0 : 0.006 + curseFactor * 0.018; // No fog for cubes 1-3
+
+    const vigAlpha = curseFactor * 0.7;
+    vignette.style.background = `radial-gradient(ellipse at center, transparent 40%, rgba(${Math.floor(180*curseFactor)},0,0,${vigAlpha}) 100%)`; // Increased red hue
+
+    ambientLight.color.setRGB(
+        THREE.MathUtils.lerp(1.0, 0.2, curseFactor), // Lower intensity
+        THREE.MathUtils.lerp(1.0, 0.0, curseFactor),
+        THREE.MathUtils.lerp(1.0, 0.0, curseFactor)
+    );
+    ambientLight.intensity = THREE.MathUtils.lerp(1.0, 0.25, curseFactor); 
+    sunLight.intensity = THREE.MathUtils.lerp(1.2, 0.1, curseFactor); 
+
+    const gR = Math.floor(THREE.MathUtils.lerp(0x77, 0x1a, curseFactor));
+    const gG = Math.floor(THREE.MathUtils.lerp(0xcc, 0x00, curseFactor));
+    const gB = Math.floor(THREE.MathUtils.lerp(0x77, 0x00, curseFactor));
+    groundMat.color.setRGB(gR/255, gG/255, gB/255);
+
+    if (audioCtx && distortionNode) {
+    if (cubesCollected >= 5) {
+        ui.style.color = `rgb(${Math.floor(THREE.MathUtils.lerp(0x35,0xff,curseFactor*2))},${Math.floor(THREE.MathUtils.lerp(0xfc,0x00,(curseFactor)*2))},${Math.floor(THREE.MathUtils.lerp(0x0d,0x00,curseFactor*2))})`;
+    }
+
+        distortionNode.curve = makeDistortionCurve(curseFactor * 200);
+        buildReverb(0.3 + curseFactor * 2.5);
+        masterGain.gain.value = 1.0 + curseFactor * 0.4;
+    }
+
+    if (cubesCollected >= 15) {
+        monsters.forEach(m => m.visible = true);
+        playMonsterMusic();
+    }
+
+    if (curseFactor > 0.4) {
+        const tBase = curseFactor - 0.4;
+        for (let i = 0; i < obstacles.length; i++) {
+            const obs = obstacles[i];
+            // materials already have emissive set; change intensity only
+            obs.material.emissiveIntensity = tBase * 0.08 * (Math.sin(gameTime + i)*0.5+0.5);
+        }
+    }
+}
+
+// ===================== PLAYER / PHYSICS =====================
+let mouseSensitivity = 1.0;
+let keyMapping = {
+    forward: 'KeyW',
+    backward: 'KeyS',
+    left: 'KeyA',
+    right: 'KeyD',
+    jump: 'Space',
+    sprint: 'ShiftLeft',
+    slide: 'ControlLeft'
+};
+
+const actionLabels = {
+    forward: 'Move Forward',
+    backward: 'Move Backward',
+    left: 'Move Left',
+    right: 'Move Right',
+    jump: 'Jump',
+    sprint: 'Sprint',
+    slide: 'Slide / Crouch'
+};
+
+function loadKeybinds() {
+    const saved = localStorage.getItem('redCubeBinds');
+    if (saved) {
+        try { keyMapping = JSON.parse(saved); } catch(e) {}
+    }
+    const savedSens = localStorage.getItem('redCubeSens');
+    if (savedSens) {
+        mouseSensitivity = parseFloat(savedSens);
+        const slider = document.getElementById('sens-slider');
+        if (slider) {
+            slider.value = mouseSensitivity;
+            document.getElementById('sens-val').textContent = mouseSensitivity.toFixed(1);
+        }
+    }
+    updateKeybindUI();
+}
+
+function saveKeybinds() {
+    localStorage.setItem('redCubeBinds', JSON.stringify(keyMapping));
+    localStorage.setItem('redCubeSens', mouseSensitivity.toString());
+}
+
+function resetToDefaults() {
+    keyMapping = {
+        forward: 'KeyW',
+        backward: 'KeyS',
+        left: 'KeyA',
+        right: 'KeyD',
+        jump: 'Space',
+        sprint: 'ShiftLeft',
+        slide: 'ControlLeft'
+    };
+    mouseSensitivity = 1.0;
+    const slider = document.getElementById('sens-slider');
+    if (slider) {
+        slider.value = 1.0;
+        document.getElementById('sens-val').textContent = '1.0';
+    }
+    rebindingAction = null;
+    saveKeybinds();
+    updateKeybindUI();
+}
+
+document.getElementById('sens-slider').addEventListener('input', (e) => {
+    mouseSensitivity = parseFloat(e.target.value);
+    document.getElementById('sens-val').textContent = mouseSensitivity.toFixed(1);
+    saveKeybinds();
+});
+
+function formatBind(code) {
+    if (!code) return '';
+    if (code.startsWith('Mouse')) {
+        const b = code.replace('Mouse', '');
+        if (b === '0') return 'L-MOUSE';
+        if (b === '1') return 'M-MOUSE';
+        if (b === '2') return 'R-MOUSE';
+        return `MOUSE-${b}`;
+    }
+    return code
+        .replace('Key', '')
+        .replace('Digit', '')
+        .replace('Numpad', 'NUM-')
+        .replace('KP_', 'NUM-')
+        .replace('Arrow', '')
+        .replace('ShiftLeft', 'L-SHIFT')
+        .replace('ShiftRight', 'R-SHIFT')
+        .replace('ControlLeft', 'L-CTRL')
+        .replace('ControlRight', 'R-CTRL')
+        .replace('AltLeft', 'L-ALT')
+        .replace('AltRight', 'R-ALT')
+        .replace('Space', 'SPACE')
+        .replace('Enter', 'ENTER')
+        .replace('Escape', 'ESC')
+        .replace('PageUp', 'PG-UP')
+        .replace('PageDown', 'PG-DN')
+        .replace('Delete', 'DEL')
+        .replace('Insert', 'INS')
+        .replace('Backspace', 'BS')
+        .replace('Tab', 'TAB')
+        .replace('BracketLeft', '[')
+        .replace('BracketRight', ']')
+        .replace('Semicolon', ';')
+        .replace('Quote', "'")
+        .replace('Comma', ',')
+        .replace('Period', '.')
+        .replace('Slash', '/')
+        .replace('Backslash', '\\')
+        .replace('Minus', '-')
+        .replace('Equal', '=')
+        .replace('Backquote', '`')
+        .replace('Capslock', 'CAPS')
+        .toUpperCase();
+}
+
+let rebindingAction = null;
+function updateKeybindUI() {
+    const list = document.getElementById('bind-list');
+    if (!list) return;
+    list.innerHTML = '';
+    Object.keys(keyMapping).forEach(action => {
+        const row = document.createElement('div');
+        row.style.display = 'flex';
+        row.style.justifyContent = 'space-between';
+        row.style.marginBottom = '8px';
+        row.style.alignItems = 'center';
+        
+        const label = document.createElement('span');
+        label.textContent = actionLabels[action];
+        label.style.color = '#aaa';
+        
+        const btn = document.createElement('button');
+        btn.className = 'menu-btn';
+        btn.style.width = '120px';
+        btn.style.margin = '0';
+        btn.style.padding = '4px';
+        btn.style.fontSize = '10px';
+        btn.id = `btn-${action}`;
+        btn.textContent = formatBind(keyMapping[action]);
+        btn.onclick = () => {
+            rebindingAction = action;
+            btn.textContent = '...';
+        };
+        
+        row.appendChild(label);
+        row.appendChild(btn);
+        list.appendChild(row);
+    });
+    
+    // Update main menu text
+    const f = formatBind(keyMapping.forward) || '?';
+    const l = formatBind(keyMapping.left) || '?';
+    const b = formatBind(keyMapping.backward) || '?';
+    const r = formatBind(keyMapping.right) || '?';
+    document.getElementById('binds-text').innerHTML = `${f}/${l}/${b}/${r} — Move &nbsp;|&nbsp; ${formatBind(keyMapping.jump)} — Jump &nbsp;|&nbsp; ${formatBind(keyMapping.sprint)} — Sprint<br>Collect all 20 red cubes<br>Follow the golden beacons`;
+}
+
+loadKeybinds();
+
+const velocity = new THREE.Vector3();
+const playerHeight = 1.8;
+let currentPlayerHeight = playerHeight; // Dynamic player height for sliding
+let isGrounded = false;
+let currentSprintMultiplier = 1.0; // For maintaining air momentum
+let wasGroundedLastFrame = false;
+let isWallRunning = false;
+let wallNormal = new THREE.Vector3();
+let bobTimer = 0, stepTimer = 0;
+let pitch = 0, yaw = 0;
+let canDoubleJump = false;
+
+// Sliding variables
+let isSliding = false;
+let isDive = false;
+let isSlideJump = false;
+let slideTimer = 0;
+let slideCooldownTimer = 0;
+let cubeBoostTimer = 0;
+let slideDirection = new THREE.Vector3();
+const SLIDE_DURATION = 1.2;
+const SLIDE_INITIAL_SPEED = 28.0; // Slightly reduced for better physics stability
+const SLIDE_COOLDOWN = 0.2; // Snappier slide recovery
+let isJumpscareActive = false;
+let isLocked = false;
+let isFlying = false;
+let debugStructureMarkers = [];
+
+const GRAVITY = 28.0;
+const WALL_GRAVITY = 5.0;
+const MOVE_SPEED = 13.0;
+const JUMP_FORCE = 13.5;
+const WALL_JUMP_FORCE_UP = 9.5; //
+const WALL_JUMP_FORCE_SIDE = 10.5;
+
+const keys = { w:false, a:false, s:false, d:false, space:false, shift:false, control:false };
+const instructions = document.getElementById('instructions');
+const pauseMenu = document.getElementById('pause-menu');
+let gameStarted = false, gameEnded = false;
+
+async function startLoadingSequence() {
+    const screen = document.getElementById('loading-screen');
+    const bar = document.getElementById('loading-bar-inner');
+    const status = document.getElementById('loading-status');
+    
+    instructions.style.display = 'none';
+    screen.style.display = 'flex';
+    
+    // Apply pulsing effects based on curseFactor
+    const pulseTime = 2.0 / (1 + curseFactor * 4); // Faster pulse if cursed
+    screen.style.animation = `pulse-screen ${pulseTime}s infinite ease-in-out`;
+    bar.style.animation = `pulse-bar ${pulseTime}s infinite ease-in-out`;
+    if (curseFactor > 0.5) status.style.color = "#ff0000";
+
+    initAudio();
+
+    // 1. Pre-bake Reverb Cache (The main cause of cube pickup lag)
+    // We generate buffers for durations 0.1s through 1.0s ahead of time.
+    for (let i = 1; i <= 10; i++) {
+        const dur = i / 10;
+        status.textContent = `Baking Reverb Space: ${dur.toFixed(1)}s`;
+        bar.style.width = (i * 5) + "%";
+        buildReverbNow(dur);
+        await new Promise(r => setTimeout(r, 20)); // Yield to allow UI update
+    }
+
+    // 2. Wait for Chase Music to decode
+    status.textContent = "Decoding Horror Streams...";
+    bar.style.width = "70%";
+    if (musicLoadPromise) await musicLoadPromise;
+
+    // 3. Pre-spawn Monsters (prevents lag hitch at 17 cubes)
+    status.textContent = "Manifesting Horrors...";
+    bar.style.width = "85%";
+    for (let i = 0; i < 3; i++) {
+        createMonster();
+        await new Promise(r => setTimeout(r, 10));
+    }
+    
+    bar.style.width = "100%";
+    status.textContent = "Void Ready";
+    
+    setTimeout(() => {
+        gameStarted = true;
+        screen.style.display = 'none';
+        document.body.requestPointerLock();
+    }, 400);
+}
+
+instructions.addEventListener('click', () => {
+    if (isJumpscareActive) return; 
+    startLoadingSequence();
+});
+function resumeGame() {
+    document.body.requestPointerLock();
+}
+
+document.addEventListener('pointerlockchange', () => {
+    isLocked = document.pointerLockElement === document.body;
+    if (!isJumpscareActive && !gameEnded) {
+        if (isLocked) {
+            instructions.style.display = 'none';
+            pauseMenu.style.display = 'none';
+        } else {
+            if (gameStarted) {
+                pauseMenu.style.display = 'block';
+            } else {
+                instructions.style.display = 'block';
+            }
+        }
+    }
+});
+
+function openSettings(e) {
+    if (e) e.stopPropagation();
+    document.getElementById('settings-menu').style.display = 'flex';
+}
+
+function closeSettings() {
+    document.getElementById('settings-menu').style.display = 'none';
+}
+
+document.addEventListener('mousemove', e => {
+    if (!isLocked || isJumpscareActive) return;
+    const sens = (0.002 * mouseSensitivity) + curseFactor * 0.0008;
+    yaw -= e.movementX * sens;
+    pitch -= e.movementY * (sens + (curseFactor > 0.7 ? Math.sin(gameTime*3)*0.002 : 0));
+    pitch = Math.max(-Math.PI/2.2, Math.min(Math.PI/2.2, pitch));
+    player.rotation.y = yaw + (curseFactor > 0.8 ? Math.sin(gameTime*1.5)*0.04 : 0);
+    camera.rotation.x = pitch;
+});
+
+document.addEventListener('contextmenu', e => e.preventDefault());
+
+function handleMouse(button, isDown) {
+    const code = `Mouse${button}`;
+    if(code === keyMapping.forward) keys.w = isDown;
+    if(code === keyMapping.left) keys.a = isDown;
+    if(code === keyMapping.backward) keys.s = isDown;
+    if(code === keyMapping.right) keys.d = isDown;
+    if(code === keyMapping.jump) keys.space = isDown;
+    if(code === keyMapping.sprint) keys.shift = isDown;
+    if(code === keyMapping.slide) keys.control = isDown;
+}
+
+document.addEventListener('mousedown', e => {
+    if (rebindingAction) {
+        if (e.target.classList.contains('menu-btn')) return;
+        keyMapping[rebindingAction] = `Mouse${e.button}`;
+        saveKeybinds();
+        updateKeybindUI();
+        rebindingAction = null;
+        return;
+    }
+    handleMouse(e.button, true);
+});
+document.addEventListener('mouseup', e => {
+    handleMouse(e.button, false);
+});
+
+document.addEventListener('keydown', e => {
+    if (rebindingAction) {
+        e.preventDefault();
+        keyMapping[rebindingAction] = e.code;
+        saveKeybinds();
+        updateKeybindUI();
+        rebindingAction = null;
+        return;
+    }
+
+    if(e.code === keyMapping.forward) keys.w=true;
+    if(e.code === keyMapping.left) keys.a=true;
+    if(e.code === keyMapping.backward) keys.s=true;
+    if(e.code === keyMapping.right) keys.d=true;
+    if(e.code === keyMapping.jump) { e.preventDefault(); keys.space=true; }
+    
+    // Special handling for modifiers to allow both Left/Right versions if not explicitly rebound
+    if(e.code === keyMapping.sprint || (keyMapping.sprint === 'ShiftLeft' && e.code === 'ShiftRight')) keys.shift=true;
+    if(e.code === keyMapping.slide || (keyMapping.slide === 'ControlLeft' && e.code === 'ControlRight')) keys.control=true;
+});
+document.addEventListener('keyup', e => {
+    if(e.code === keyMapping.forward) keys.w=false;
+    if(e.code === keyMapping.left) keys.a=false;
+    if(e.code === keyMapping.backward) keys.s=false;
+    if(e.code === keyMapping.right) keys.d=false;
+    if(e.code === keyMapping.jump) keys.space=false;
+    
+    if(e.code === keyMapping.sprint || (keyMapping.sprint === 'ShiftLeft' && e.code === 'ShiftRight')) keys.shift=false;
+    if(e.code === keyMapping.slide || (keyMapping.slide === 'ControlLeft' && e.code === 'ControlRight')) keys.control=false;
+});
+
+// ===================== DEBUG CONSOLE =====================
+window.debug = {
+    fly: function() {
+        isFlying = !isFlying;
+        if (isFlying) {
+            console.log('🛸 Flying mode ENABLED');
+            console.log('Use WASD to move horizontally, Q/E for up/down');
+        } else {
+            console.log('🛸 Flying mode disabled');
+        }
+        return isFlying;
+    },
+    land: function() {
+        isFlying = false;
+        console.log('🛸 Flying mode disabled');
+        return false;
+    },
+    collectCubes: function(n) {
+        const oldCount = cubesCollected;
+        cubesCollected = Math.max(0, Math.min(n, 20));
+        
+        // hide cubes and beacons
+        for (let i = 0; i < cubesCollected && i < cubes.length; i++) {
+            cubes[i].userData.collected = true;
+            cubes[i].visible = false;
+            beacons[i].visible = false;
+        }
+        // show remaining
+        for (let i = cubesCollected; i < cubes.length; i++) {
+            cubes[i].userData.collected = false;
+            cubes[i].visible = true;
+            beacons[i].visible = true;
+        }
+        
+        updateCurse();
+        console.log(`📦 Cubes set to ${cubesCollected}/20`);
+        return cubesCollected;
+    },
+    showStructures: function() {
+        // clear old markers
+        debugStructureMarkers.forEach(m => scene.remove(m));
+        debugStructureMarkers.length = 0;
+        
+        // create markers at each platform
+        const markerGeo = new THREE.BoxGeometry(2, 0.5, 2);
+        const markerMat = new THREE.MeshPhongMaterial({ 
+            color: 0x00ff00, 
+            emissive: 0x00ff00, 
+            emissiveIntensity: 1.0,
+            wireframe: false
+        });
+        
+        platformData.forEach(p => {
+            const marker = new THREE.Mesh(markerGeo, markerMat);
+            marker.position.set(p[3], p[4] + p[1] + 3, p[5]);
+            scene.add(marker);
+            debugStructureMarkers.push(marker);
+        });
+        
+        console.log(`🗺️ Showing ${platformData.length} platforms with green markers (3 units above surface)`);
+        return debugStructureMarkers.length;
+    },
+    hideStructures: function() {
+        debugStructureMarkers.forEach(m => scene.remove(m));
+        debugStructureMarkers.length = 0;
+        console.log('🗺️ Markers hidden');
+    },
+    testPattern: function(patternArray, offsetX = 0, offsetY = 0, offsetZ = 0) {
+        this.clearTestPattern();
+        window._testPatternMeshes = [];
+
+        // Robust check: if the first element isn't an array, wrap the whole input
+        if (patternArray && !Array.isArray(patternArray[0])) {
+            patternArray = [patternArray];
+        }
+
+        patternArray.forEach(block => {
+            const [w, h, d, x, y, z, color = 0xff00ff] = block;
+            const geo = new THREE.BoxGeometry(w, h, d);
+            const mat = new THREE.MeshPhongMaterial({ 
+                map: stoneTex, 
+                color
+            });
+            const mesh = new THREE.Mesh(geo, mat);
+            mesh.position.set(x + offsetX, y + h/2 + offsetY, z + offsetZ);
+            scene.add(mesh);
+            window._testPatternMeshes.push(mesh);
+            obstacles.push(mesh);
+        });
+        
+        buildObstacleBoxes();
+        console.log(`✨ Test pattern created with ${patternArray.length} blocks at offset (${offsetX}, ${offsetY}, ${offsetZ})`);
+        console.log('Pattern structure: [width, height, depth, x, y, z, color_hex]');
+        console.log('Copy this when happy: debug.copyPatternCode(patternArray)');
+        return patternArray;
+    },
+    testAtPlayer: function(patternArray) {
+        const pos = player.position.clone();
+        // Calculate forward vector based on player yaw
+        const forward = new THREE.Vector3(0, 0, -8).applyAxisAngle(Y_AXIS, yaw);
+        return this.testPattern(patternArray, pos.x + forward.x, 0, pos.z + forward.z);
+    },
+    clearTestPattern: function() {
+        if (window._testPatternMeshes) {
+            window._testPatternMeshes.forEach(m => {
+                scene.remove(m);
+                const idx = obstacles.indexOf(m);
+                if (idx > -1) obstacles.splice(idx, 1);
+            });
+            window._testPatternMeshes.length = 0;
+            buildObstacleBoxes();
+            console.log('✨ Test pattern cleared');
+        }
+    },
+    copyPatternCode: function(patternArray) {
+        const code = JSON.stringify(patternArray, null, 4);
+        console.log('Pattern code (copy to clipboard):');
+        console.log(code);
+        return code;
+    },
+    slowMo: function(factor = 0.2) {
+        timeScale = factor;
+        console.log(`⏳ Time scale set to ${timeScale}`);
+        return timeScale;
+    },
+    resetTime: function() {
+        timeScale = 1.0;
+        console.log('⏳ Time scale reset to normal');
+        return timeScale;
+    },
+    showPath: function(enable = true) {
+        this._pathEnabled = enable;
+        if (!enable && this._pathLine) {
+            scene.remove(this._pathLine);
+            this._pathLine = null;
+            this._pathPoints = [];
+        }
+        if (enable) this._pathPoints = [];
+        console.log(`🛣️ Path visualization: ${enable ? 'ON' : 'OFF'}`);
+        return enable;
+    },
+    stats: function() {
+        console.log('=== GAME STATS ===');
+        console.log(`Cubes collected: ${cubesCollected}/20`);
+        console.log(`Curse factor: ${(curseFactor*100).toFixed(1)}%`);
+        console.log(`Player position: (${player.position.x.toFixed(1)}, ${player.position.y.toFixed(1)}, ${player.position.z.toFixed(1)})`);
+        console.log(`Platforms generated: ${platformData.length}`);
+        console.log(`Flying: ${isFlying ? 'ON' : 'OFF'}`);
+        console.log(`Monsters spawned: ${monsters.length}`);
+        return { cubesCollected, curseFactor, playerPos: player.position, platformCount: platformData.length };
+    }
+};
+
+console.log('%c🎮 DEBUG MODE ENABLED', 'font-size: 16px; color: #0f0; font-weight: bold;');
+console.log('%cAvailable commands:', 'color: #0f0; font-weight: bold;');
+console.log('%cdebug.fly() - Toggle flying mode', 'color: #0f0;');
+console.log('%cdebug.land() - Disable flying', 'color: #0f0;');
+console.log('%cdebug.collectCubes(n) - Set cubes collected (0-20)', 'color: #0f0;');
+console.log('%cdebug.showStructures() - Show all platforms as green markers', 'color: #0f0;');
+console.log('%cdebug.hideStructures() - Hide markers', 'color: #0f0;');
+console.log('%cdebug.showPath(bool) - Toggle player movement trail', 'color: #0f0;');
+console.log('%cdebug.slowMo(factor) - Slow down time (default 0.2)', 'color: #0f0;');
+console.log('%cdebug.resetTime() - Reset time to normal speed', 'color: #0f0;');
+console.log('%cdebug.testPattern(array) - Preview a custom pattern in-game', 'color: #0f0;');
+console.log('%cdebug.testAtPlayer(array) - Preview pattern directly in front of you', 'color: #0f0;');
+console.log('%cdebug.clearTestPattern() - Remove test pattern', 'color: #0f0;');
+console.log('%cdebug.stats() - Show current game stats', 'color: #0f0;');
+console.log('%c\n📐 PATTERN FORMAT: [width, height, depth, x, y, z, color_hex]', 'color: #ff0; font-weight: bold;');
+console.log('%cExample: [[16, 1, 16, 0, 0, 0, 0x6a8090], [8, 10, 8, 20, 0, 0, 0x3a5060]]', 'color: #ff0;');
+
+// ===================== MAIN LOOP =====================
+const clock = new THREE.Clock();
+let timeScale = 1.0;
+let droneTimer = 0;
+let monsterGroanTimer = 0;
+
+const speedContainer = document.getElementById('speed-container');
+const speedBarFill = document.getElementById('speed-bar-fill');
+const machText = document.getElementById('mach-text');
+let lastMach = 0;
+
+// reusable temporaries to avoid allocations
+const tmpInput = new THREE.Vector3();
+const tmpMove = new THREE.Vector3();
+const tmpRay = new THREE.Raycaster();
+const tmpDirA = new THREE.Vector3(-1,0,-0.2);
+const tmpDirB = new THREE.Vector3(1,0,-0.2);
+const tmpToPlayer = new THREE.Vector3();
+// common axis vectors reused instead of allocating per-frame
+const Y_AXIS = new THREE.Vector3(0,1,0);
+const FORWARD = new THREE.Vector3(0,0,-1);
+const X_AXIS = new THREE.Vector3(1,0,0);
+const tmpAxis = new THREE.Vector3();
+
+let lastUIContent = "";
+function animate() {
+    requestAnimationFrame(animate);
+    const dt = Math.min(clock.getDelta(), 0.05) * timeScale;
+    
+    if (isJumpscareActive) { 
+        renderer.render(scene, camera); 
+        return; 
+    }
+    if (!isLocked) { 
+        renderer.render(scene, camera); 
+        return; 
+    }
+
+    gameTime += dt;
+    droneTimer += dt;
+    monsterGroanTimer += dt;
+    if (slideCooldownTimer > 0) slideCooldownTimer -= dt;
+    if (cubeBoostTimer > 0) cubeBoostTimer -= dt;
+
+    // Update current player height (for sliding)
+    let targetPlayerEyeHeight = playerHeight; // Default eye height
+    if (isSliding) {
+        targetPlayerEyeHeight = playerHeight * 0.5; // Half height for slide
+    }
+    currentPlayerHeight = THREE.MathUtils.lerp(currentPlayerHeight, targetPlayerEyeHeight, dt * 25);
+
+    // Update current sprint multiplier (for air momentum)
+    if (keys.shift) {
+        currentSprintMultiplier = 1.95;
+    } else if (isGrounded) {
+        currentSprintMultiplier = THREE.MathUtils.lerp(currentSprintMultiplier, 1.0, dt * 10);
+    }
+
+    if (droneTimer > 4.0 && curseFactor > 0.25) {
+        droneTimer = 0;
+        playAmbientDrone();
+    }
+    if (monsterGroanTimer > 2.5 + Math.random()*2 && curseFactor > 0.8) {
+        monsterGroanTimer = 0;
+        playMonsterSound();
+    }
+
+    wasGroundedLastFrame = isGrounded;
+
+    if (isFlying) {
+        // flying mode: no gravity, free movement
+        velocity.y = 0;
+    } else if (isWallRunning) {
+        velocity.y -= WALL_GRAVITY * dt;
+        if (velocity.y < -1.5) velocity.y = -1.5;
+    } else if (!isGrounded) {
+        let gravityMult = 1.0;
+        if (isSliding) {
+            if (isDive) gravityMult = 1.75; // Only dives get heavy sliding gravity
+        } else if (cubeBoostTimer > 0 && !isSlideJump) {
+            gravityMult = 1.75; // Parry boost gravity, unless it's a slide-jump
+        }
+        velocity.y -= GRAVITY * gravityMult * dt;
+    }
+
+    // input -> tmpInput (reuse)
+    tmpInput.set(0,0,0);
+    if (keys.w) tmpInput.z -= 1;
+    if (keys.s) tmpInput.z += 1;
+    if (keys.a) tmpInput.x -= 1;
+    if (keys.d) tmpInput.x += 1;
+    tmpInput.normalize();
+    tmpMove.copy(tmpInput).applyAxisAngle(Y_AXIS, yaw);
+
+    // --- SLIDING & MOVEMENT PHYSICS (Grace-inspired) ---
+    let hSpeed = new THREE.Vector2(velocity.x, velocity.z).length();
+
+    // --- PIZZA TOWER SPEED-O-METER ---
+    const speedPercent = Math.min((hSpeed / 55) * 100, 100);
+    speedBarFill.style.width = speedPercent + '%';
+    
+    let mach = 0;
+    let machColor = '#ffffff';
+    if (hSpeed > 48) { mach = 4; machColor = '#f759ab'; }
+    else if (hSpeed > 36) { mach = 3; machColor = '#ff4d4f'; }
+    else if (hSpeed > 24) { mach = 2; machColor = '#ffec3d'; }
+    else if (hSpeed > 12) { mach = 1; machColor = '#ffffff'; }
+    else { mach = 0; machColor = '#666666'; } // Mach 0 for low speeds/standing still
+
+    // Pulse effect: text gets bigger as you go faster within a Mach tier
+    const pulse = 1.0 + (speedPercent / 100) * 0.15;
+    machText.style.transform = `skewX(-10deg) scale(${pulse})`;
+
+    // Rank up flash effect
+    if (mach > lastMach) {
+        machText.style.filter = 'brightness(3) saturate(2)';
+        setTimeout(() => { machText.style.filter = 'none'; }, 150);
+    }
+    lastMach = mach;
+
+    machText.innerText = `MACH ${mach}`;
+    machText.style.color = machColor;
+    // Shake the meter and camera at high mach
+    if (mach >= 3) {
+        speedContainer.style.animation = 'mach-shake 0.1s infinite';
+        if (mach === 4) {
+            camera.position.x += (Math.random() - 0.5) * 0.05;
+            camera.position.y += (Math.random() - 0.5) * 0.05;
+        }
+    } else {
+        speedContainer.style.animation = 'none';
+    }
+
+    if (keys.control && !isSliding && (slideCooldownTimer <= 0 || !isGrounded) && hSpeed > 5.0) {
+        isSliding = true;
+        slideTimer = SLIDE_DURATION;
+        isDive = !isGrounded; 
+        isSlideJump = false;
+
+        if (!isGrounded) {
+            // Mid-air Slide (Dive): Direction based on where looking
+            slideDirection.set(0, 0, -1).applyAxisAngle(Y_AXIS, yaw).normalize();
+            if (cubeBoostTimer <= 0) velocity.y = -22.0; // Skip the downward slam if we have a parry boost
+        } else {
+            // Ground Slide: Direction based on current movement
+            slideDirection.set(velocity.x, 0, velocity.z).normalize();
+        }
+        
+        // Massive initial speed kick
+        const boost = Math.min(Math.max(hSpeed * 1.4, SLIDE_INITIAL_SPEED), 55.0);
+        velocity.x = slideDirection.x * boost;
+        velocity.z = slideDirection.z * boost;
+        playNoise(0.2, 0.1, 40); // Deep rumble
+    }
+
+    if (isSliding) {
+        slideTimer -= dt;
+        const progress = THREE.MathUtils.clamp(1.0 - (slideTimer / SLIDE_DURATION), 0, 1);
+        const decayCurve = Math.pow(1.0 - progress, 0.85);
+        const targetSpeed = SLIDE_INITIAL_SPEED * decayCurve;
+        
+        // Interpolate velocity: maintain heading with reduced steering influence to prevent physics whiplash
+        velocity.x = THREE.MathUtils.lerp(velocity.x, slideDirection.x * targetSpeed + tmpMove.x * 4.0, dt * 4.0);
+        velocity.z = THREE.MathUtils.lerp(velocity.z, slideDirection.z * targetSpeed + tmpMove.z * 4.0, dt * 4.0);
+
+        hSpeed = new THREE.Vector2(velocity.x, velocity.z).length();
+        // End conditions
+        if (slideTimer <= 0 || !keys.control || (isGrounded && hSpeed < 4.0)) {
+            isSliding = false;
+            slideCooldownTimer = SLIDE_COOLDOWN;
+        }
+    }
+    
+    if (isFlying) {
+        // Q/E for vertical flight
+        if (keys.space) tmpInput.y += 1; // space for up
+        if (keys.shift) tmpInput.y -= 1; // shift for down (also used for sprint normally)
+    }
+    const isSprinting = keys.shift && !isFlying; // This is for UI/FOV, not direct speed anymore
+    const cubeBoostActiveMult = cubeBoostTimer > 0 ? 1.45 : 1.0;
+    const speedMult = currentSprintMultiplier * (1 + curseFactor * 0.15) * cubeBoostActiveMult;
+    const flySpeed = 25.0;
+    
+    if (isFlying) {
+        velocity.x = tmpMove.x * flySpeed;
+        velocity.y = tmpMove.y * flySpeed;
+        velocity.z = tmpMove.z * flySpeed;
+    } else if (!isSliding) {
+        // Significantly reduced friction (lerpFactor) during cube boost to preserve parry momentum
+        const lerpFactor = isGrounded ? (cubeBoostTimer > 0 ? 3.0 : 8.0) : (cubeBoostTimer > 0 ? 0.6 : (keys.shift ? 3.5 : 1.2));
+        velocity.x = THREE.MathUtils.lerp(velocity.x, tmpMove.x * MOVE_SPEED * speedMult, dt * lerpFactor);
+        velocity.z = THREE.MathUtils.lerp(velocity.z, tmpMove.z * MOVE_SPEED * speedMult, dt * lerpFactor);
+    }
+
+    const totalBoostForFOV = (currentSprintMultiplier * cubeBoostActiveMult) - 1.0;
+    let targetFOV = THREE.MathUtils.lerp(75, 98, totalBoostForFOV / 1.9) + curseFactor * 15;
+    if (isSliding) targetFOV += 26; 
+
+    if (Math.abs(camera.fov - targetFOV) > 0.1) {
+        camera.fov = THREE.MathUtils.lerp(camera.fov, targetFOV, dt * 10);
+        camera.updateProjectionMatrix();
+    }
+
+    // wall detection using reusable raycaster and dirs
+    let nearWall = false;
+    let detectedWallNormal = wallNormal; // reuse
+    const pPos = player.position;
+    if (!isGrounded && !isFlying && keys.w) {
+        const nearObstacles = [];
+        for (let i = 0; i < obstacles.length; i++) {
+            const obs = obstacles[i];
+            const dx = obs.position.x - pPos.x;
+            const dz = obs.position.z - pPos.z;
+            if (dx * dx + dz * dz < 225) nearObstacles.push(obs); 
+        }
+
+        const rayDirs = [tmpDirA, tmpDirB];
+        for (let ri = 0; ri < 2; ri++) {
+            const dirLocal = rayDirs[ri];
+            // transform local dir by yaw into world
+            const dir = tmpMove.set(dirLocal.x, dirLocal.y, dirLocal.z).applyAxisAngle(Y_AXIS, yaw).normalize();
+            tmpRay.set(pPos, dir);
+            tmpRay.far = playerRadius + 0.8;
+            const hits = tmpRay.intersectObjects(nearObstacles, true);
+            if (hits.length > 0) { nearWall=true; detectedWallNormal.copy(hits[0].face.normal); break; }
+        }
+    }
+    let targetTilt = 0;
+    if (nearWall && !isGrounded && !isFlying) {
+        if (!isWallRunning) { velocity.y = Math.max(velocity.y, 1.5); playJump(); }
+        isWallRunning = true;
+        wallNormal.copy(detectedWallNormal);
+        tmpAxis.copy(X_AXIS).applyAxisAngle(Y_AXIS, yaw);
+        targetTilt = tmpAxis.dot(wallNormal) * 0.18;
+    } else {
+        isWallRunning = false;
+        targetTilt = tmpInput.x * 0.08;
+    }
+    camera.rotation.z = THREE.MathUtils.lerp(camera.rotation.z, targetTilt, dt * 12);
+
+    // --- JUMPING LOGIC ---
+    if (keys.space && !isFlying) {
+        if (isGrounded || isWallRunning || canDoubleJump) {
+            if (isSliding) {
+                // Slide Jump: preserve momentum but launch upward
+                velocity.y = JUMP_FORCE * 1.1;
+                isSliding = false;
+                isSlideJump = true;
+                slideCooldownTimer = SLIDE_COOLDOWN;
+                canDoubleJump = true; // Allow air jump after slide launch
+            } else if (isWallRunning) {
+                velocity.y = WALL_JUMP_FORCE_UP;
+                velocity.addScaledVector(wallNormal, WALL_JUMP_FORCE_SIDE);
+                canDoubleJump = true; // Refresh double jump on wall contact
+            } else {
+                velocity.y = JUMP_FORCE;
+                if (isGrounded) canDoubleJump = true; // First jump enables the second
+                else if (canDoubleJump) canDoubleJump = false; // Air jump uses it up
+            }
+            isGrounded = false;
+            isWallRunning = false;
+            playJump();
+            keys.space = false; // Consume jump input
+        }
+    }
+
+    player.position.addScaledVector(velocity, dt);
+
+    // Safety: Prevent NaN corruption from "yeeting" the player
+    if (isNaN(player.position.x) || isNaN(player.position.y) || isNaN(player.position.z)) {
+        console.warn("⚠️ Physics NaN detected! Resetting position...");
+        player.position.set(0, 3, 0);
+        velocity.set(0, 0, 0);
+    }
+
+    if (!isFlying) {
+        if (pPos.y < -12) {
+            player.position.set(0, 3, 0);
+            velocity.set(0,0,0);
+            isSliding = false;
+            slideCooldownTimer = 0; // No cooldown on respawn
+            isWallRunning = false;
+            playNoise(0.5, 0.2, 400);
+        }
+
+        const halfMap = MAP_SIZE / 2 - 5;
+        if (Math.abs(pPos.x) > halfMap) { 
+            player.position.x = Math.sign(pPos.x)*halfMap; 
+            velocity.x = 0; 
+            if (isSliding) {
+                isSliding = false;
+                slideCooldownTimer = SLIDE_COOLDOWN;
+            }
+        }
+        if (Math.abs(pPos.z) > halfMap) { 
+            player.position.z = Math.sign(pPos.z)*halfMap; 
+            velocity.z = 0; 
+            if (isSliding) {
+                isSliding = false;
+                slideCooldownTimer = SLIDE_COOLDOWN;
+            }
+        }
+
+        // ground snap
+        isGrounded = false;
+        if (pPos.y <= currentPlayerHeight + 0.01) {
+            player.position.y = currentPlayerHeight;
+            if (velocity.y < 0) velocity.y = 0;
+            isGrounded = true;
+        }
+
+        // obstacle collisions using precomputed boxes (no per-frame setFromObject)
+        const feetY = pPos.y - currentPlayerHeight; // Distance from eye to feet is now currentPlayerHeight
+        const pxMin = pPos.x - playerRadius;
+        const pxMax = pPos.x + playerRadius;
+        const pzMin = pPos.z - playerRadius;
+        const pzMax = pPos.z + playerRadius;
+        for (let i = 0; i < obstacleBoxes.length; i++) {
+            const obs = obstacles[i];
+            // Fast spatial culling for physics loop
+            if (Math.abs(pPos.x - obs.position.x) > 35 || Math.abs(pPos.z - obs.position.z) > 35) continue;
+
+            const box = obstacleBoxes[i];
+            const overlapX = Math.min(pxMax, box.max.x) - Math.max(pxMin, box.min.x);
+            const overlapY = Math.min(pPos.y, box.max.y) - Math.max(feetY, box.min.y); // feetY is pPos.y - currentPlayerHeight
+            const overlapZ = Math.min(pzMax, box.max.z) - Math.max(pzMin, box.min.z);
+            if (overlapX <= 0 || overlapY <= 0 || overlapZ <= 0) continue;
+
+            // first resolve vertical landing / ceiling collision
+            const isLanding = velocity.y <= 0.1 && pPos.y >= box.max.y && feetY >= box.max.y - 0.4;
+            if (isLanding) {
+                player.position.y = box.max.y + currentPlayerHeight; // Snap eye level to top of box + current eye height
+                velocity.y = 0;
+                isGrounded = true;
+                continue;
+            }
+            const isCeilingHit = velocity.y > 0 && pPos.y <= box.min.y + currentPlayerHeight;
+            if (isCeilingHit) {
+                player.position.y = box.min.y + currentPlayerHeight;
+                velocity.y = 0;
+                continue;
+            }
+
+            // Horizontal resolution if in vertical overlap
+            if (overlapX < overlapZ) {
+                const push = Math.min(overlapX + 0.001, 1.0); // Clamp push to prevent flinging
+                if (pPos.x > (box.min.x + box.max.x) * 0.5) {
+                    player.position.x += push;
+                } else {
+                    player.position.x -= push;
+                }
+                velocity.x = 0;
+                if (isSliding) {
+                    isSliding = false; // Immediately kill slide state on wall impact
+                    slideCooldownTimer = SLIDE_COOLDOWN;
+                    velocity.z *= 0.5; // Dampen remaining momentum to stabilize
+                }
+            } else {
+                const push = Math.min(overlapZ + 0.001, 1.0); // Clamp push to prevent flinging
+                if (pPos.z > (box.min.z + box.max.z) * 0.5) {
+                    player.position.z += push;
+                } else {
+                    player.position.z -= push;
+                }
+                velocity.z = 0;
+                if (isSliding) {
+                    isSliding = false; // Immediately kill slide state on wall impact
+                    slideCooldownTimer = SLIDE_COOLDOWN;
+                    velocity.x *= 0.5; // Dampen remaining momentum to stabilize
+                }
+            }
+        }
+
+        if (isGrounded && !wasGroundedLastFrame) { playLand(); canDoubleJump = false; isSlideJump = false; }
+    }
+
+    // Camera bobbing
+    if (isSliding) {
+        camera.position.y = THREE.MathUtils.lerp(camera.position.y, -0.2, dt * 10); // Slight camera drop for slide
+        camera.position.x = THREE.MathUtils.lerp(camera.position.x, 0, dt * 10); // No X bob during slide
+        stepTimer = 0; // No steps during slide
+    } else {
+        if ((isGrounded || isWallRunning) && hSpeed > 1.0) {
+            const sm = isWallRunning ? 1.8 : 1.4;
+            bobTimer += dt * hSpeed * sm;
+            stepTimer += dt * hSpeed * sm;
+            const curseBob = 1 + curseFactor * 1.5;
+            camera.position.y = Math.sin(bobTimer) * 0.06 * curseBob;
+            camera.position.x = Math.cos(bobTimer*0.5) * 0.04 * curseBob; // Camera X bob
+            if (stepTimer >= Math.PI) { playStep(isWallRunning?0.03:0.06); stepTimer=0; }
+        } else {
+            camera.position.y = THREE.MathUtils.lerp(camera.position.y, 0, dt * 10); // Reset camera Y bob
+            camera.position.x = THREE.MathUtils.lerp(camera.position.x, 0, dt * 10); // Reset camera X bob
+            stepTimer = 0;
+        }
+    }
+
+    if (curseFactor > 0.6) {
+        const shakeAmt = (curseFactor - 0.6) * 0.018;
+        camera.position.x += (Math.random()-0.5) * shakeAmt;
+        camera.position.y += (Math.random()-0.5) * shakeAmt;
+    }
+
+    // cubes update: use distanceToSquared
+    for (let i = 0; i < cubes.length; i++) {
+        const cube = cubes[i];
+        if (cube.userData.collected) continue;
+        cube.rotation.y += dt * (1 + curseFactor * 2);
+        cube.rotation.x += dt * 0.4;
+        cube.material.emissiveIntensity = 2.5 + Math.sin(gameTime * 4 + i) * 1.5;
+
+        const dx = player.position.x - cube.position.x;
+        const dy = player.position.y - cube.position.y;
+        const dz = player.position.z - cube.position.z;
+        const distSq = dx*dx + dy*dy + dz*dz;
+        if (distSq < 4.0) { // radius 2 -> 4
+            cube.userData.collected = true;
+            cube.visible = false;
+            beacons[i].visible = false;
+            cubesCollected++;
+            playCollect(cubesCollected);
+            cubeBoostTimer = 2.5; // 2.5 second speed boost on collection
+
+            // Parry-style fling: launch the player in the direction they are looking
+            // Now significantly rewards vertical speed (diving) for massive launches
+            const parryBase = 45.0;
+            const currentHSpeed = new THREE.Vector2(velocity.x, velocity.z).length();
+            const fallSpeed = Math.max(0, -velocity.y); // Capture downward momentum
+            const launchMag = parryBase + (currentHSpeed * 1.5) + (fallSpeed * 5.0);
+            camera.getWorldDirection(tmpToPlayer);
+            velocity.copy(tmpToPlayer).multiplyScalar(launchMag);
+
+            // Guarantee upward momentum: ensure Y-velocity is at least 65% of the total launch power
+            velocity.y = Math.max(velocity.y, launchMag * 0.65);
+
+            isGrounded = false;
+            isSliding = false;
+            isSlideJump = false; // Parries override the slide-jump gravity reset
+            canDoubleJump = true; // Refresh jump as a reward
+
+            updateCurse();
+
+            if (curseMessages[cubesCollected]) {
+                showCurseMsg(curseMessages[cubesCollected]);
+            }
+
+            if (cubesCollected === 10) {
+                enableFlashlight();
+                showCurseMsg("you found a flashlight\nit won't help", 3000);
+            }
+
+            if (cubesCollected === 20) {
+                setTimeout(endGame, 1500);
+            }
+        }
+    }
+
+    // beacons animation using pre-cached rings
+    for (let i = 0; i < beacons.length; i++) {
+        const bg = beacons[i];
+        if (!bg.visible) continue;
+    }
+    // update instanced rings once per frame
+    if (ringInstanced) {
+        for (let ri = 0; ri < ringDescriptors.length; ri++) {
+            const rd = ringDescriptors[ri];
+            const beaconIndex = Math.floor(ri / 2);
+            const beacon = beacons[beaconIndex];
+            if (!beacon || !beacon.visible) {
+                ringDummy.position.set(rd.bx, -999, rd.bz);
+                ringDummy.rotation.x = Math.PI / 2;
+                ringDummy.scale.set(0.0001, 0.0001, 0.0001);
+                ringDummy.updateMatrix();
+                ringInstanced.setMatrixAt(ri, ringDummy.matrix);
+                continue;
+            }
+            rd.phase += dt * 0.8;
+            const floatY = (rd.baseY + rd.phase * 6) % 80;
+            ringDummy.position.set(rd.bx, floatY, rd.bz);
+            ringDummy.rotation.x = Math.PI / 2;
+            const s = 1.0 + floatY * 0.025;
+            ringDummy.scale.set(s, s, s);
+            ringDummy.updateMatrix();
+            ringInstanced.setMatrixAt(ri, ringDummy.matrix);
+        }
+        ringInstanced.instanceMatrix.needsUpdate = true;
+    }
+
+    if (cubesCollected >= 15) {
+        for (let mi = 0; mi < monsters.length; mi++) {
+            const m = monsters[mi];
+            if (!m.visible) continue;
+            tmpToPlayer.copy(player.position).sub(m.position);
+            tmpToPlayer.y = 0;
+            const distSq = tmpToPlayer.lengthSq();
+            const S = m.userData.scale || 3.8;
+            const catchRadius = S * 1.8;
+            const catchRadiusSq = catchRadius * catchRadius;
+            const speed = (MONSTER_SPEED_BASE + curseFactor * 3) * (distSq < 60*60 ? 1.3 : 1.0);
+
+            if (distSq > 0.0001 && !isJumpscareActive) {
+                tmpToPlayer.normalize();
+                m.position.addScaledVector(tmpToPlayer, speed * dt);
+                m.lookAt(player.position.x, m.position.y, player.position.z);
+            }
+            m.position.y = 0;
+
+            m.userData.limbPhase += dt * (2.5 + speed * 0.15);
+            m.rotation.z = Math.sin(m.userData.limbPhase * 0.7) * 0.06;
+            m.rotation.x = Math.sin(m.userData.limbPhase) * 0.04;
+
+            m.userData.groanTimer += dt;
+            if (m.userData.groanTimer > 2.5 + Math.random()*3) {
+                m.userData.groanTimer = 0;
+                if (distSq < 100*100) playMonsterSound();
+            }
+
+            if (distSq < catchRadiusSq && !isJumpscareActive) {
+                isJumpscareActive = true;
+                const jsOverlay = document.getElementById('jumpscare-overlay');
+                
+                document.exitPointerLock();
+                isLocked = false;
+                
+                jsOverlay.style.display = 'flex';
+                instructions.style.display = 'none';
+                
+                playNoise(0.9, 0.6, 250);
+                playTone(45, 'sawtooth', 0.9, 0.5);
+                playTone(90, 'sawtooth', 0.9, 0.3);
+
+                setTimeout(() => {
+                    jsOverlay.style.display = 'none';
+                    
+                    player.position.set(0, 3, 0);
+                    velocity.set(0, 0, 0);
+                    isSliding = false;
+                    slideCooldownTimer = 0;
+                    isWallRunning = false;
+                    yaw = 0; 
+                    pitch = 0;
+                    camera.rotation.x = 0;
+                    player.rotation.y = 0;
+                    
+                    for (let m2i = 0; m2i < monsters.length; m2i++) {
+                        const m2 = monsters[m2i];
+                        const ang = Math.random() * Math.PI * 2;
+                        m2.position.set(Math.cos(ang) * 200 + player.position.x, 0, Math.sin(ang) * 200 + player.position.z);
+                    }
+                    
+                    isJumpscareActive = false;
+                    instructions.style.display = 'block';
+                }, 1500);
+            }
+        }
+    }
+
+    // Update debug path if enabled
+    if (window.debug._pathEnabled) {
+        if (!window.debug._pathPoints) window.debug._pathPoints = [];
+        window.debug._pathPoints.push(player.position.clone());
+        if (window.debug._pathPoints.length > 500) window.debug._pathPoints.shift();
+        
+        if (window.debug._pathLine) scene.remove(window.debug._pathLine);
+        const geo = new THREE.BufferGeometry().setFromPoints(window.debug._pathPoints);
+        const mat = new THREE.LineBasicMaterial({ color: 0x00ff00 });
+        window.debug._pathLine = new THREE.Line(geo, mat);
+        scene.add(window.debug._pathLine);
+    }
+
+    const moveStatus = isSliding ? 'SLIDING' : (isWallRunning ? 'WALL-RUN' : (isSprinting ? '⚡ SPRINT' : (isGrounded ? 'GROUNDED' : 'AIRBORNE')));
+    const flashStatus = flashlightEnabled ? ' 🔦' : '';
+    let uiContent = `Cubes: ${cubesCollected} / 20${flashStatus}<br>[ ${moveStatus} ]`;
+    if (curseFactor > 0.7 && Math.random() < 0.005) {
+        uiContent = `̷C̷u̷b̷e̷s̷: ${cubesCollected} / 20<br>[ ${moveStatus} ]`;
+    }
+
+    if (uiContent !== lastUIContent) {
+        ui.innerHTML = uiContent;
+        lastUIContent = uiContent;
+    }
+
+    if (cubesCollected >= 5) {
+        ui.style.color = `rgb(${Math.floor(THREE.MathUtils.lerp(0x35,0xff,curseFactor*2))},${Math.floor(THREE.MathUtils.lerp(0xfc,0x00,(curseFactor)*2))},${Math.floor(THREE.MathUtils.lerp(0x0d,0x00,curseFactor*2))})`;
+    } //
+
+    if (flashlightEnabled && flashlight) {
+        const flickerBase = 3.5 - curseFactor * 1.2;
+        if (curseFactor > 0.7 && Math.random() < 0.04) flashlight.intensity = 0.1;
+        else flashlight.intensity = flickerBase * 0.6; // Reduced flashlight intensity
+    }
+
+    // Update sonic booms
+    for (let i = sonicBooms.length - 1; i >= 0; i--) {
+        const b = sonicBooms[i];
+        b.userData.life += dt;
+        const progress = b.userData.life / 0.5; // 0.5 second duration
+        if (progress >= 1) {
+            scene.remove(b);
+            sonicBooms.splice(i, 1);
+        } else {
+            b.scale.setScalar(1 + progress * 15);
+            b.material.opacity = 1 - progress;
+        }
+    }
+
+    renderer.render(scene, camera);
+}
+
+function endGame() {
+    gameEnded = true;
+    if (monsterMusicSource) {
+        monsterMusicSource.stop();
+        monsterMusicSource = null;
+    }
+    winScreen.style.display = 'flex';
+    document.exitPointerLock();
+    const sub = document.getElementById('win-sub');
+    const endings = [
+        "you were warned.",
+        "they followed you home.",
+        "none of this was real.",
+        "the cubes remember you.",
+        "close the tab. please.",
+    ];
+    sub.textContent = endings[Math.floor(Math.random()*endings.length)];
+    if (audioCtx) {
+        const o = audioCtx.createOscillator();
+        const g = audioCtx.createGain();
+        o.type = 'sawtooth';
+        o.frequency.setValueAtTime(40, audioCtx.currentTime);
+        o.frequency.linearRampToValueAtTime(15, audioCtx.currentTime + 4);
+        g.gain.setValueAtTime(0.3, audioCtx.currentTime);
+        g.gain.linearRampToValueAtTime(0.0, audioCtx.currentTime + 5);
+        o.connect(g); g.connect(audioCtx.destination);
+        o.start(); o.stop(audioCtx.currentTime + 5);
+    }
+}
+
+window.addEventListener('resize', () => {
+    camera.aspect = innerWidth / innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(innerWidth, innerHeight);
+});
+
+// Standard 'beforeunload' can trigger permissions violations in some environments.
+// window.addEventListener('beforeunload', (e) => {
+//     e.preventDefault();
+//     e.returnValue = ''; 
+// });
+
+animate();
+</script>
+</body>
+</html>
