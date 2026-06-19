@@ -121,12 +121,36 @@
         @keyframes mach-shake { 0% { transform: translate(0,0); } 25% { transform: translate(2px, -2px); } 50% { transform: translate(-2px, 1px); } 75% { transform: translate(1px, -1px); } 100% { transform: translate(0,0); } }
         
         @keyframes flicker { 0%,100%{opacity:1} 50%{opacity:0.3} }
+        .mode-btn.active, .diff-btn.active { background: #ff0000; color: #000; box-shadow: 0 0 10px #ff0000; }
+        #ability-ui {
+            position: fixed; bottom: 18px; right: 18px;
+            color: #fff; font-family: monospace; font-size: 13px;
+            background: rgba(0,0,0,0.7); padding: 8px 12px; border-radius: 4px;
+            z-index: 10; border: 1px solid #444; min-width: 130px; text-align: right;
+        }
+        #ability-bar-bg { width: 100%; height: 6px; background: rgba(255,255,255,0.1); margin-top: 6px; border-radius: 3px; overflow: hidden; }
+        #ability-bar-fill { width: 100%; height: 100%; background: #00ffff; transition: width 0.1s linear; }
+        #leaderboard-menu .lb-row { display:flex; justify-content:space-between; padding:5px 0; border-bottom:1px solid #300; font-size:13px; }
+        #leaderboard-menu .lb-tab { background:#000; border:1px solid #555; color:#888; cursor:pointer; font-family:monospace; font-size:10px; padding:5px 10px; }
+        #leaderboard-menu .lb-tab.active { border-color:#ff0000; color:#ff0000; }
     </style>
 </head>
 <body>
 <div id="crosshair"></div>
 <div id="vignette"></div>
 <div id="curse-msg"></div>
+<div id="ability-ui">
+    <span id="ability-label">FLARE [Q] — READY</span>
+    <div id="ability-bar-bg"><div id="ability-bar-fill"></div></div>
+</div>
+<div id="leaderboard-menu" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.95); z-index:2200; flex-direction:column; align-items:center; justify-content:center; color:#ff0000; font-family:monospace; border:1px solid #ff0000;">
+    <h2 style="letter-spacing:6px; text-shadow:0 0 10px #ff0000; margin-bottom:14px;">LEADERBOARD</h2>
+    <div id="leaderboard-tabs" style="display:flex; gap:6px; margin-bottom:6px;"></div>
+    <div id="leaderboard-diff-tabs" style="display:flex; gap:6px; margin-bottom:16px;"></div>
+    <div id="leaderboard-list" style="width:320px; min-height:140px; text-align:left; background: rgba(20,0,0,0.5); padding: 16px; border: 1px solid #300; color:#ccc;">Loading...</div>
+    <div id="leaderboard-status" style="width:320px; font-size:10px; color:#666; margin-top:8px; letter-spacing:1px;"></div>
+    <button class="menu-btn" onclick="closeLeaderboard()" style="margin-top:18px;">BACK</button>
+</div>
 <div id="loading-screen">
     <h2 style="letter-spacing: 8px; margin-bottom: 10px;">PREPARING VOID</h2>
     <div id="loading-bar-outer"><div id="loading-bar-inner"></div></div>
@@ -140,6 +164,21 @@
     Collect all 20 red cubes<br>
     Follow the golden beacons<br><br>
     <span style="color:#555; font-size:11px;">something is out there. don't worry about it.</span></p>
+
+    <div style="margin-top:18px; font-size:10px; color:#777; letter-spacing:2px;">MODE</div>
+    <div id="mode-select" style="margin:6px 0; display:flex; gap:6px; justify-content:center;">
+        <button class="menu-btn mode-btn" data-mode="classic" onclick="selectMode(event,'classic')" style="width:90px; font-size:10px; padding:6px; margin:0;">CLASSIC</button>
+        <button class="menu-btn mode-btn" data-mode="timeattack" onclick="selectMode(event,'timeattack')" style="width:90px; font-size:10px; padding:6px; margin:0;">TIME ATTACK</button>
+        <button class="menu-btn mode-btn" data-mode="survival" onclick="selectMode(event,'survival')" style="width:90px; font-size:10px; padding:6px; margin:0;">SURVIVAL</button>
+    </div>
+    <div style="margin-top:10px; font-size:10px; color:#777; letter-spacing:2px;">DIFFICULTY</div>
+    <div id="diff-select" style="margin:6px 0; display:flex; gap:6px; justify-content:center;">
+        <button class="menu-btn diff-btn" data-diff="easy" onclick="selectDifficulty(event,'easy')" style="width:64px; font-size:10px; padding:6px; margin:0;">EASY</button>
+        <button class="menu-btn diff-btn" data-diff="normal" onclick="selectDifficulty(event,'normal')" style="width:64px; font-size:10px; padding:6px; margin:0;">NORMAL</button>
+        <button class="menu-btn diff-btn" data-diff="hard" onclick="selectDifficulty(event,'hard')" style="width:64px; font-size:10px; padding:6px; margin:0;">HARD</button>
+        <button class="menu-btn diff-btn" data-diff="nightmare" onclick="selectDifficulty(event,'nightmare')" style="width:64px; font-size:10px; padding:6px; margin:0;">NIGHTMARE</button>
+    </div>
+    <button class="menu-btn" onclick="openLeaderboard(event)" style="width:140px; margin:12px auto 0; font-size:11px; padding:6px;">LEADERBOARD</button>
 </div>
 <div id="pause-menu">
     <h2>PAUSED</h2>
@@ -169,6 +208,10 @@
 <div id="win-screen">
     <h1>YOU COLLECTED THEM ALL</h1>
     <p id="win-sub">...</p>
+    <div style="margin-top:24px; display:flex; gap:10px;">
+        <button class="menu-btn" onclick="openLeaderboard(event)">LEADERBOARD</button>
+        <button class="menu-btn" onclick="location.reload()">PLAY AGAIN</button>
+    </div>
 </div>
 
 <div id="jumpscare-overlay">
@@ -207,7 +250,7 @@ function initAudio() {
         .then(data => audioCtx.decodeAudioData(data))
         .then(buf => {
             monsterMusicBuffer = buf;
-            if (cubesCollected >= 15) playMonsterMusic();
+            if (cubesCollected >= MONSTER_THRESHOLD) playMonsterMusic();
         })
         .catch(e => console.warn("Monster music failed to load:", e));
 }
@@ -671,6 +714,252 @@ function createMonster() {
     return group;
 }
 
+// ===================== MODES & DIFFICULTY =====================
+let gameMode = localStorage.getItem('redCubeMode') || 'classic';
+let difficulty = localStorage.getItem('redCubeDifficulty') || 'normal';
+let playerName = localStorage.getItem('redCubeName') || '';
+
+const DIFFICULTY_SETTINGS = {
+    easy:      { monsterThreshold: 18, speedMult: 0.8,  catchMult: 0.8  },
+    normal:    { monsterThreshold: 15, speedMult: 1.0,  catchMult: 1.0  },
+    hard:      { monsterThreshold: 10, speedMult: 1.25, catchMult: 1.1  },
+    nightmare: { monsterThreshold: 0,  speedMult: 1.6,  catchMult: 1.25 }
+};
+
+let MONSTER_THRESHOLD = (gameMode === 'survival') ? 0 : DIFFICULTY_SETTINGS[difficulty].monsterThreshold;
+
+function recomputeMonsterThreshold() {
+    MONSTER_THRESHOLD = (gameMode === 'survival') ? 0 : DIFFICULTY_SETTINGS[difficulty].monsterThreshold;
+}
+
+function selectMode(e, mode) {
+    if (e) e.stopPropagation();
+    gameMode = mode;
+    localStorage.setItem('redCubeMode', mode);
+    recomputeMonsterThreshold();
+    updateModeDiffUI();
+}
+
+function selectDifficulty(e, diff) {
+    if (e) e.stopPropagation();
+    difficulty = diff;
+    localStorage.setItem('redCubeDifficulty', diff);
+    recomputeMonsterThreshold();
+    updateModeDiffUI();
+}
+
+function updateModeDiffUI() {
+    document.querySelectorAll('.mode-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === gameMode));
+    document.querySelectorAll('.diff-btn').forEach(b => b.classList.toggle('active', b.dataset.diff === difficulty));
+    const goalText = gameMode === 'survival'
+        ? 'Survive as long as you can'
+        : 'Collect all 20 red cubes';
+    const modeNote = gameMode === 'timeattack' ? ' — fastest time wins' : (gameMode === 'survival' ? ' — they are awake from the start' : '');
+    document.getElementById('binds-text').innerHTML =
+        `${formatBind(keyMapping.forward)}/${formatBind(keyMapping.left)}/${formatBind(keyMapping.backward)}/${formatBind(keyMapping.right)} — Move &nbsp;|&nbsp; ${formatBind(keyMapping.jump)} — Jump &nbsp;|&nbsp; ${formatBind(keyMapping.sprint)} — Sprint &nbsp;|&nbsp; ${formatBind(keyMapping.ability)} — Flare<br>${goalText}${modeNote}<br>Follow the golden beacons<br><br><span style="color:#555; font-size:11px;">something is out there. don't worry about it.</span>`;
+}
+
+// ===================== LEADERBOARD =====================
+const LB_MODES = [['classic','CLASSIC'], ['timeattack','TIME ATTACK'], ['survival','SURVIVAL']];
+const LB_DIFFS = [['easy','EASY'], ['normal','NORMAL'], ['hard','HARD'], ['nightmare','NIGHTMARE']];
+let lbViewMode = gameMode;
+let lbViewDiff = difficulty;
+
+// ---- Global backend config ----
+// Create a free Firebase project (firebase.google.com -> Realtime Database),
+// set its rules to allow public read/write to the "leaderboard" node (see
+// the rules snippet provided alongside this file), then paste the database
+// URL below. Leave it as null to fall back to local-only scoring.
+const FIREBASE_DB_URL = "https://YOUR-PROJECT-ID-default-rtdb.firebaseio.com"; // <-- replace, or set to null
+
+function leaderboardPath(mode, diff) { return `leaderboard/${mode}/${diff}`; }
+
+let backendStatus = 'unknown'; // 'online' | 'offline' | 'unconfigured'
+
+function isFirebaseConfigured() {
+    return !!FIREBASE_DB_URL && !FIREBASE_DB_URL.includes('YOUR-PROJECT-ID');
+}
+
+// Reads/writes go to Firebase Realtime Database (true global, shared by every
+// player) when configured. Falls back to window.storage (global, but only
+// inside a Claude.ai artifact), then to localStorage (this browser only).
+async function lbGet(path) {
+    if (isFirebaseConfigured()) {
+        try {
+            const res = await fetch(`${FIREBASE_DB_URL}/${path}.json`);
+            if (!res.ok) throw new Error('bad response');
+            const data = await res.json();
+            backendStatus = 'online';
+            return Array.isArray(data) ? data.filter(Boolean) : [];
+        } catch (e) {
+            backendStatus = 'offline';
+            console.warn('Firebase read failed, falling back to local storage', e);
+        }
+    } else {
+        backendStatus = 'unconfigured';
+    }
+    if (window.storage) {
+        try {
+            const res = await window.storage.get(path.replace(/\//g, ':'), true);
+            return res ? JSON.parse(res.value) : [];
+        } catch (e) { return []; }
+    }
+    try {
+        const raw = localStorage.getItem(path);
+        return raw ? JSON.parse(raw) : [];
+    } catch (e) { return []; }
+}
+
+async function lbSet(path, entries) {
+    if (isFirebaseConfigured()) {
+        try {
+            const res = await fetch(`${FIREBASE_DB_URL}/${path}.json`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(entries)
+            });
+            if (!res.ok) throw new Error('bad response');
+            backendStatus = 'online';
+            return;
+        } catch (e) {
+            backendStatus = 'offline';
+            console.warn('Firebase write failed, falling back to local storage', e);
+        }
+    }
+    if (window.storage) {
+        try { await window.storage.set(path.replace(/\//g, ':'), JSON.stringify(entries), true); return; } catch (e) {}
+    }
+    try { localStorage.setItem(path, JSON.stringify(entries)); } catch (e) {}
+}
+
+function leaderboardKey(mode, diff) { return leaderboardPath(mode, diff); }
+
+function formatTime(t) {
+    const m = Math.floor(t / 60);
+    const s = (t % 60).toFixed(1);
+    return `${m}:${s.padStart(4, '0')}`;
+}
+
+function escapeName(s) {
+    return (s || '???').toString().slice(0, 16).replace(/[<>&]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]));
+}
+
+function buildLeaderboardTabs() {
+    const modeTabs = document.getElementById('leaderboard-tabs');
+    const diffTabs = document.getElementById('leaderboard-diff-tabs');
+    modeTabs.innerHTML = '';
+    diffTabs.innerHTML = '';
+    LB_MODES.forEach(([key, label]) => {
+        const b = document.createElement('button');
+        b.className = 'lb-tab' + (key === lbViewMode ? ' active' : '');
+        b.textContent = label;
+        b.onclick = () => { lbViewMode = key; buildLeaderboardTabs(); loadLeaderboard(); };
+        modeTabs.appendChild(b);
+    });
+    LB_DIFFS.forEach(([key, label]) => {
+        const b = document.createElement('button');
+        b.className = 'lb-tab' + (key === lbViewDiff ? ' active' : '');
+        b.textContent = label;
+        b.onclick = () => { lbViewDiff = key; buildLeaderboardTabs(); loadLeaderboard(); };
+        diffTabs.appendChild(b);
+    });
+}
+
+async function openLeaderboard(e) {
+    if (e) e.stopPropagation();
+    lbViewMode = gameMode;
+    lbViewDiff = difficulty;
+    buildLeaderboardTabs();
+    document.getElementById('leaderboard-menu').style.display = 'flex';
+    await loadLeaderboard();
+}
+
+function closeLeaderboard() {
+    document.getElementById('leaderboard-menu').style.display = 'none';
+}
+
+async function loadLeaderboard() {
+    const list = document.getElementById('leaderboard-list');
+    list.innerHTML = '<span style="color:#666;">Loading...</span>';
+    const entries = await lbGet(leaderboardKey(lbViewMode, lbViewDiff));
+    renderLeaderboard(entries);
+    updateBackendStatusUI();
+}
+
+function updateBackendStatusUI() {
+    const el = document.getElementById('leaderboard-status');
+    if (!el) return;
+    if (backendStatus === 'online') {
+        el.textContent = '● connected — scores are global';
+        el.style.color = '#3f3';
+    } else if (backendStatus === 'offline') {
+        el.textContent = '● backend unreachable — showing local scores';
+        el.style.color = '#ff0';
+    } else {
+        el.textContent = window.storage
+            ? '● running in-artifact — scores are global to this artifact'
+            : '● no backend configured — scores are local to this browser';
+        el.style.color = '#666';
+    }
+}
+
+function renderLeaderboard(entries) {
+    const list = document.getElementById('leaderboard-list');
+    if (!entries || !entries.length) {
+        list.innerHTML = '<span style="color:#666; font-size:11px;">No scores yet. Be the first.</span>';
+        return;
+    }
+    const label = lbViewMode === 'survival' ? 'TIME SURVIVED' : 'COMPLETION TIME';
+    list.innerHTML = `<div style="color:#666; font-size:10px; margin-bottom:8px; letter-spacing:1px;">${label}</div>` +
+        entries.map((e, i) => `<div class="lb-row"><span>${i + 1}. ${escapeName(e.name)}</span><span>${formatTime(e.time)}</span></div>`).join('');
+}
+
+async function submitScore(time) {
+    if (!playerName) {
+        let name = prompt('New leaderboard entry — enter your name:', 'PLAYER') || 'PLAYER';
+        playerName = name.slice(0, 16);
+        localStorage.setItem('redCubeName', playerName);
+    }
+    const key = leaderboardKey(gameMode, difficulty);
+    try {
+        let entries = await lbGet(key);
+        entries.push({ name: playerName, time });
+        const ascending = gameMode !== 'survival'; // lower time is better, except survival (longer is better)
+        entries.sort((a, b) => ascending ? a.time - b.time : b.time - a.time);
+        entries = entries.slice(0, 10);
+        await lbSet(key, entries);
+        return entries;
+    } catch (e) {
+        console.warn('Leaderboard submit failed', e);
+        return null;
+    }
+}
+
+// ===================== ABILITY: FLARE =====================
+const ABILITY_COOLDOWN = 12.0;
+let abilityCooldownTimer = 0;
+
+function useAbility() {
+    if (!gameStarted || gameEnded || isJumpscareActive || abilityCooldownTimer > 0) return;
+    abilityCooldownTimer = ABILITY_COOLDOWN;
+    triggerSonicBoom(player.position.clone());
+    for (let i = 0; i < monsters.length; i++) {
+        const m = monsters[i];
+        if (!m.visible) continue;
+        const dx = m.position.x - player.position.x;
+        const dz = m.position.z - player.position.z;
+        const distSq = dx * dx + dz * dz;
+        if (distSq < 70 * 70) {
+            const dist = Math.sqrt(distSq) || 1;
+            m.position.x += (dx / dist) * 16;
+            m.position.z += (dz / dist) * 16;
+            m.userData.stunTimer = 3.0;
+        }
+    }
+    showCurseMsg('FLARE DEPLOYED', 1200);
+}
+
+
 // ===================== CURSE SYSTEM =====================
 let cubesCollected = 0;
 let curseFactor = 0;
@@ -737,7 +1026,7 @@ function updateCurse() {
         masterGain.gain.value = 1.0 + curseFactor * 0.4;
     }
 
-    if (cubesCollected >= 15) {
+    if (cubesCollected >= MONSTER_THRESHOLD) {
         monsters.forEach(m => m.visible = true);
         playMonsterMusic();
     }
@@ -761,7 +1050,8 @@ let keyMapping = {
     right: 'KeyD',
     jump: 'Space',
     sprint: 'ShiftLeft',
-    slide: 'ControlLeft'
+    slide: 'ControlLeft',
+    ability: 'KeyQ'
 };
 
 const actionLabels = {
@@ -771,7 +1061,8 @@ const actionLabels = {
     right: 'Move Right',
     jump: 'Jump',
     sprint: 'Sprint',
-    slide: 'Slide / Crouch'
+    slide: 'Slide / Crouch',
+    ability: 'Flare Ability'
 };
 
 function loadKeybinds() {
@@ -804,7 +1095,8 @@ function resetToDefaults() {
         right: 'KeyD',
         jump: 'Space',
         sprint: 'ShiftLeft',
-        slide: 'ControlLeft'
+        slide: 'ControlLeft',
+        ability: 'KeyQ'
     };
     mouseSensitivity = 1.0;
     const slider = document.getElementById('sens-slider');
@@ -1087,6 +1379,7 @@ document.addEventListener('keydown', e => {
     if(e.code === keyMapping.backward) keys.s=true;
     if(e.code === keyMapping.right) keys.d=true;
     if(e.code === keyMapping.jump) { e.preventDefault(); keys.space=true; }
+    if(e.code === keyMapping.ability) useAbility();
     
     // Special handling for modifiers to allow both Left/Right versions if not explicitly rebound
     if(e.code === keyMapping.sprint || (keyMapping.sprint === 'ShiftLeft' && e.code === 'ShiftRight')) keys.shift=true;
@@ -1315,6 +1608,16 @@ function animate() {
     droneTimer += dt;
     monsterGroanTimer += dt;
     if (slideCooldownTimer > 0) slideCooldownTimer -= dt;
+
+    if (abilityCooldownTimer > 0) {
+        abilityCooldownTimer = Math.max(0, abilityCooldownTimer - dt);
+        const pct = (abilityCooldownTimer / ABILITY_COOLDOWN) * 100;
+        document.getElementById('ability-bar-fill').style.width = (100 - pct) + '%';
+        document.getElementById('ability-label').textContent = `FLARE [${formatBind(keyMapping.ability)}] — ${abilityCooldownTimer.toFixed(1)}s`;
+    } else if (document.getElementById('ability-label').textContent.indexOf('READY') === -1) {
+        document.getElementById('ability-bar-fill').style.width = '100%';
+        document.getElementById('ability-label').textContent = `FLARE [${formatBind(keyMapping.ability)}] — READY`;
+    }
     if (cubeBoostTimer > 0) cubeBoostTimer -= dt;
 
     // Update current player height (for sliding)
@@ -1724,8 +2027,8 @@ function animate() {
                 showCurseMsg("you found a flashlight\nit won't help", 3000);
             }
 
-            if (cubesCollected === 20) {
-                setTimeout(endGame, 1500);
+            if (cubesCollected === 20 && gameMode !== 'survival') {
+                setTimeout(() => endGame('win'), 1500);
             }
         }
     }
@@ -1761,17 +2064,25 @@ function animate() {
         ringInstanced.instanceMatrix.needsUpdate = true;
     }
 
-    if (cubesCollected >= 15) {
+    if (cubesCollected >= MONSTER_THRESHOLD) {
+        const diffSettings = DIFFICULTY_SETTINGS[difficulty];
         for (let mi = 0; mi < monsters.length; mi++) {
             const m = monsters[mi];
             if (!m.visible) continue;
+
+            if (m.userData.stunTimer > 0) {
+                m.userData.stunTimer -= dt;
+                m.position.y = 0;
+                continue;
+            }
+
             tmpToPlayer.copy(player.position).sub(m.position);
             tmpToPlayer.y = 0;
             const distSq = tmpToPlayer.lengthSq();
             const S = m.userData.scale || 3.8;
-            const catchRadius = S * 1.8;
+            const catchRadius = S * 1.8 * diffSettings.catchMult;
             const catchRadiusSq = catchRadius * catchRadius;
-            const speed = (MONSTER_SPEED_BASE + curseFactor * 3) * (distSq < 60*60 ? 1.3 : 1.0);
+            const speed = (MONSTER_SPEED_BASE + curseFactor * 3) * (distSq < 60*60 ? 1.3 : 1.0) * diffSettings.speedMult;
 
             if (distSq > 0.0001 && !isJumpscareActive) {
                 tmpToPlayer.normalize();
@@ -1806,7 +2117,12 @@ function animate() {
 
                 setTimeout(() => {
                     jsOverlay.style.display = 'none';
-                    
+
+                    if (gameMode === 'survival') {
+                        endGame('caught');
+                        return;
+                    }
+
                     player.position.set(0, 3, 0);
                     velocity.set(0, 0, 0);
                     isSliding = false;
@@ -1882,7 +2198,7 @@ function animate() {
     renderer.render(scene, camera);
 }
 
-function endGame() {
+function endGame(outcome) {
     gameEnded = true;
     if (monsterMusicSource) {
         monsterMusicSource.stop();
@@ -1890,6 +2206,7 @@ function endGame() {
     }
     winScreen.style.display = 'flex';
     document.exitPointerLock();
+    const heading = document.querySelector('#win-screen h1');
     const sub = document.getElementById('win-sub');
     const endings = [
         "you were warned.",
@@ -1898,7 +2215,29 @@ function endGame() {
         "the cubes remember you.",
         "close the tab. please.",
     ];
-    sub.textContent = endings[Math.floor(Math.random()*endings.length)];
+    const flavor = endings[Math.floor(Math.random()*endings.length)];
+    const finalTime = gameTime;
+
+    if (outcome === 'caught') {
+        heading.textContent = 'THEY GOT YOU';
+        sub.textContent = `survived ${formatTime(finalTime)} — ${flavor}`;
+    } else if (gameMode === 'timeattack') {
+        heading.textContent = 'CUBES COLLECTED';
+        sub.textContent = `time: ${formatTime(finalTime)} — ${flavor}`;
+    } else {
+        heading.textContent = 'YOU COLLECTED THEM ALL';
+        sub.textContent = flavor;
+    }
+
+    submitScore(finalTime).then(entries => {
+        if (entries) {
+            const rank = entries.findIndex(e => e.name === playerName && e.time === finalTime) + 1;
+            if (rank > 0) {
+                sub.textContent += ` — rank #${rank} on the ${gameMode}/${difficulty} board`;
+            }
+        }
+    });
+
     if (audioCtx) {
         const o = audioCtx.createOscillator();
         const g = audioCtx.createGain();
