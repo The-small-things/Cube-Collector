@@ -143,6 +143,9 @@
     <span id="ability-label">FLARE [Q] — READY</span>
     <div id="ability-bar-bg"><div id="ability-bar-fill"></div></div>
 </div>
+<div id="run-timer" style="display:none; position:fixed; top:14px; left:50%; transform:translateX(-50%); z-index:10; color:#fff; font-family:monospace; font-size:18px; background:rgba(0,0,0,0.6); padding:6px 16px; border-radius:4px; border:1px solid #444; letter-spacing:1px;">
+    <span id="run-timer-label">TIME</span> <span id="run-timer-value">0:00.0</span>
+</div>
 <div id="taint-badge" style="display:none; position:fixed; top:14px; left:14px; z-index:10; color:#ff0; background:rgba(0,0,0,0.7); border:1px solid #ff0; font-family:monospace; font-size:11px; padding:5px 9px; letter-spacing:1px;">⚠ DEBUG USED — RUN NOT ELIGIBLE FOR LEADERBOARD</div>
 <div id="leaderboard-menu" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.95); z-index:2200; flex-direction:column; align-items:center; justify-content:center; color:#ff0000; font-family:monospace; border:1px solid #ff0000;">
     <h2 style="letter-spacing:6px; text-shadow:0 0 10px #ff0000; margin-bottom:14px;">LEADERBOARD</h2>
@@ -209,7 +212,12 @@
 <div id="win-screen">
     <h1>YOU COLLECTED THEM ALL</h1>
     <p id="win-sub">...</p>
-    <div style="margin-top:24px; display:flex; gap:10px;">
+    <div id="submit-score-row" style="margin-top:18px; display:flex; gap:8px; align-items:center;">
+        <input id="submit-name-input" type="text" maxlength="16" placeholder="YOUR NAME" style="background:#000; border:1px solid #ff0000; color:#ff0000; font-family:monospace; padding:8px; width:140px; text-align:center; letter-spacing:1px;">
+        <button class="menu-btn" onclick="handleScoreSubmit()" id="submit-score-btn">SUBMIT SCORE</button>
+    </div>
+    <div id="submit-score-status" style="font-size:11px; color:#888; margin-top:8px; min-height:14px;"></div>
+    <div style="margin-top:18px; display:flex; gap:10px;">
         <button class="menu-btn" onclick="openLeaderboard(event)">LEADERBOARD</button>
         <button class="menu-btn" onclick="location.reload()">PLAY AGAIN</button>
     </div>
@@ -979,6 +987,7 @@ async function submitScore(time) {
 // ===================== ABILITY: FLARE =====================
 const ABILITY_COOLDOWN = 12.0;
 let abilityCooldownTimer = 0;
+let currentRunTime = 0;
 
 function useAbility() {
     if (!gameStarted || gameEnded || isJumpscareActive || abilityCooldownTimer > 0) return;
@@ -1335,6 +1344,15 @@ async function startLoadingSequence() {
         gameStarted = true;
         screen.style.display = 'none';
         document.body.requestPointerLock();
+
+        const timerEl = document.getElementById('run-timer');
+        if (gameMode === 'timeattack' || gameMode === 'survival') {
+            document.getElementById('run-timer-label').textContent = gameMode === 'survival' ? 'SURVIVED' : 'TIME';
+            document.getElementById('run-timer-value').textContent = formatTime(0);
+            timerEl.style.display = 'block';
+        } else {
+            timerEl.style.display = 'none';
+        }
     }, 400);
 }
 
@@ -1654,6 +1672,10 @@ function animate() {
     }
 
     gameTime += dt;
+    if (gameMode === 'timeattack' || gameMode === 'survival') {
+        const timerVal = document.getElementById('run-timer-value');
+        if (timerVal) timerVal.textContent = formatTime(gameTime);
+    }
     droneTimer += dt;
     monsterGroanTimer += dt;
     if (slideCooldownTimer > 0) slideCooldownTimer -= dt;
@@ -2247,12 +2269,53 @@ function animate() {
     renderer.render(scene, camera);
 }
 
+async function handleScoreSubmit() {
+    const nameInput = document.getElementById('submit-name-input');
+    const submitBtn = document.getElementById('submit-score-btn');
+    const status = document.getElementById('submit-score-status');
+
+    let name = (nameInput.value || '').trim();
+    if (!name) name = 'PLAYER';
+    name = name.replace(/[<>&]/g, '').slice(0, 16);
+    nameInput.value = name;
+    playerName = name;
+    localStorage.setItem('redCubeName', playerName);
+
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'SUBMITTING...';
+    status.textContent = 'submitting...';
+
+    const result = await submitScore(currentRunTime);
+
+    if (result === 'tainted') {
+        status.textContent = 'debug commands were used — not eligible for the leaderboard.';
+        submitBtn.textContent = 'SUBMIT SCORE';
+        submitBtn.disabled = false;
+    } else if (result === 'implausible') {
+        status.textContent = 'time flagged as implausible — not eligible for the leaderboard.';
+        submitBtn.textContent = 'SUBMIT SCORE';
+        submitBtn.disabled = false;
+    } else if (Array.isArray(result)) {
+        const rank = result.findIndex(e => e.name === playerName && e.time === currentRunTime) + 1;
+        status.textContent = rank > 0
+            ? `submitted — rank #${rank} on the ${gameMode}/${difficulty} board.`
+            : `submitted to the ${gameMode}/${difficulty} board.`;
+        submitBtn.textContent = 'SUBMITTED';
+    } else {
+        status.textContent = 'submission failed — backend unreachable, try again.';
+        submitBtn.textContent = 'SUBMIT SCORE';
+        submitBtn.disabled = false;
+    }
+}
+window.handleScoreSubmit = handleScoreSubmit;
+
 function endGame(outcome) {
     gameEnded = true;
     if (monsterMusicSource) {
         monsterMusicSource.stop();
         monsterMusicSource = null;
     }
+    document.getElementById('run-timer').style.display = 'none';
     winScreen.style.display = 'flex';
     document.exitPointerLock();
     const heading = document.querySelector('#win-screen h1');
@@ -2265,31 +2328,36 @@ function endGame(outcome) {
         "close the tab. please.",
     ];
     const flavor = endings[Math.floor(Math.random()*endings.length)];
-    const finalTime = gameTime;
+    currentRunTime = gameTime;
 
     if (outcome === 'caught') {
         heading.textContent = 'THEY GOT YOU';
-        sub.textContent = `survived ${formatTime(finalTime)} — ${flavor}`;
+        sub.textContent = `survived ${formatTime(currentRunTime)} — ${flavor}`;
     } else if (gameMode === 'timeattack') {
         heading.textContent = 'CUBES COLLECTED';
-        sub.textContent = `time: ${formatTime(finalTime)} — ${flavor}`;
+        sub.textContent = `time: ${formatTime(currentRunTime)} — ${flavor}`;
     } else {
         heading.textContent = 'YOU COLLECTED THEM ALL';
         sub.textContent = flavor;
     }
 
-    submitScore(finalTime).then(result => {
-        if (result === 'tainted') {
-            sub.textContent += ' — debug commands used, run not eligible for leaderboard';
-        } else if (result === 'implausible') {
-            sub.textContent += ' — time flagged as implausible, not submitted';
-        } else if (Array.isArray(result)) {
-            const rank = result.findIndex(e => e.name === playerName && e.time === finalTime) + 1;
-            if (rank > 0) {
-                sub.textContent += ` — rank #${rank} on the ${gameMode}/${difficulty} board`;
-            }
-        }
-    });
+    const nameInput = document.getElementById('submit-name-input');
+    const submitBtn = document.getElementById('submit-score-btn');
+    const status = document.getElementById('submit-score-status');
+    nameInput.value = playerName || '';
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'SUBMIT SCORE';
+
+    if (runTainted) {
+        status.textContent = 'debug commands were used — this run is not eligible for the leaderboard.';
+        document.getElementById('submit-score-row').style.display = 'none';
+    } else if (!isTimePlausible(currentRunTime)) {
+        status.textContent = 'time flagged as implausible — not eligible for the leaderboard.';
+        document.getElementById('submit-score-row').style.display = 'none';
+    } else {
+        document.getElementById('submit-score-row').style.display = 'flex';
+        status.textContent = `enter a name and submit to the ${gameMode}/${difficulty} board (${gameMode === 'survival' ? 'higher is better' : 'lower is better'})`;
+    }
 
     if (audioCtx) {
         const o = audioCtx.createOscillator();
