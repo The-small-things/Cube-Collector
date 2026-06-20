@@ -82,6 +82,74 @@
             background: radial-gradient(ellipse at center, transparent 55%, rgba(50,0,0,0) 100%);
             transition: background 1s;
         }
+        /* ===================== ANIME IMPACT FRAME (reusable FX) =====================
+           A drop-in "impact frame" hit: a hard color flash + a burst of radiating
+           speed-lines that rockets outward, the way an anime freezes on a hit.
+           Pure CSS/SVG, GPU-cheap (opacity + transform only), and mode-agnostic —
+           trigger it from anywhere via the triggerImpactFrame() JS helper defined
+           near the main loop. See that function for usage/options. */
+        #impact-frame {
+            position: fixed; inset: 0; z-index: 60; pointer-events: none;
+            opacity: 0; display: none;
+            --impact-color: #ffffff;
+            --impact-duration: 260ms;
+            --impact-blend: screen;
+        }
+        #impact-frame.firing { display: block; }
+        #impact-frame .impact-flash {
+            position: absolute; inset: 0;
+            background: var(--impact-color);
+            mix-blend-mode: var(--impact-blend);
+            opacity: 0;
+            will-change: opacity;
+        }
+        #impact-frame .impact-lines {
+            position: absolute; inset: -40%;
+            background: repeating-conic-gradient(
+                from 0deg,
+                rgba(0,0,0,0.92) 0deg 1deg,
+                transparent 1deg 5.2deg
+            );
+            border-radius: 50%;
+            -webkit-mask-image: radial-gradient(circle at center, transparent 8%, #000 28%, #000 78%, transparent 100%);
+            mask-image: radial-gradient(circle at center, transparent 8%, #000 28%, #000 78%, transparent 100%);
+            opacity: 0;
+            transform: scale(0.2) rotate(0deg);
+            transform-origin: 50% 50%;
+            will-change: opacity, transform;
+        }
+        #impact-frame.firing .impact-flash {
+            animation: impact-flash-seq var(--impact-duration) ease-out forwards;
+        }
+        #impact-frame.firing .impact-lines {
+            animation: impact-lines-seq var(--impact-duration) cubic-bezier(.1,.7,.25,1) forwards;
+        }
+        @keyframes impact-flash-seq {
+            0% { opacity: 0.95; }
+            18% { opacity: 0.7; }
+            100% { opacity: 0; }
+        }
+        @keyframes impact-lines-seq {
+            0% { transform: scale(0.15) rotate(0deg); opacity: 0; }
+            8% { opacity: 1; }
+            100% { transform: scale(2.4) rotate(10deg); opacity: 0; }
+        }
+        /* Brief camera-shake punch, applied to the canvas only so the flash/lines
+           overlay above stays pinned (classic anime "world shakes, hit stays put"). */
+        .impact-shake { animation: impact-shake-seq 0.32s linear; }
+        @keyframes impact-shake-seq {
+            0% { transform: translate(0,0); }
+            10% { transform: translate(-10px,6px); }
+            20% { transform: translate(8px,-8px); }
+            30% { transform: translate(-12px,2px); }
+            40% { transform: translate(10px,4px); }
+            50% { transform: translate(-6px,-6px); }
+            60% { transform: translate(8px,3px); }
+            70% { transform: translate(-4px,5px); }
+            80% { transform: translate(4px,-3px); }
+            90% { transform: translate(-2px,1px); }
+            100% { transform: translate(0,0); }
+        }
         #win-screen {
             position: fixed; inset: 0; background: #000;
             display: none; align-items: center; justify-content: center;
@@ -138,6 +206,7 @@
 <body>
 <div id="crosshair"></div>
 <div id="vignette"></div>
+<div id="impact-frame"><div class="impact-flash"></div><div class="impact-lines"></div></div>
 <div id="curse-msg"></div>
 <div id="ability-ui">
     <span id="ability-label">FLARE [Q] — READY</span>
@@ -146,6 +215,7 @@
 <div id="run-timer" style="display:none; position:fixed; top:14px; left:50%; transform:translateX(-50%); z-index:10; color:#fff; font-family:monospace; font-size:18px; background:rgba(0,0,0,0.6); padding:6px 16px; border-radius:4px; border:1px solid #444; letter-spacing:1px;">
     <span id="run-timer-label">TIME</span> <span id="run-timer-value">0:00.0</span>
 </div>
+<div id="fps-counter" style="display:none; position:fixed; top:14px; right:14px; z-index:10; color:#0f0; font-family:monospace; font-size:12px; background:rgba(0,0,0,0.6); padding:4px 8px; border-radius:4px; border:1px solid #0f0;">60 FPS</div>
 <div id="taint-badge" style="display:none; position:fixed; top:14px; left:14px; z-index:10; color:#ff0; background:rgba(0,0,0,0.7); border:1px solid #ff0; font-family:monospace; font-size:11px; padding:5px 9px; letter-spacing:1px;">⚠ DEBUG USED — RUN NOT ELIGIBLE FOR LEADERBOARD</div>
 <div id="leaderboard-menu" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.95); z-index:2200; flex-direction:column; align-items:center; justify-content:center; color:#ff0000; font-family:monospace; border:1px solid #ff0000;">
     <h2 style="letter-spacing:6px; text-shadow:0 0 10px #ff0000; margin-bottom:14px;">LEADERBOARD</h2>
@@ -186,7 +256,12 @@
 </div>
 <div id="pause-menu">
     <h2>PAUSED</h2>
+    <div id="pause-stats" style="color: #888; font-size: 12px; margin-bottom: 20px; line-height: 1.6;">
+        Cubes: <span id="pause-cubes">0</span>/20<br>
+        Time: <span id="pause-time">0:00.0</span>
+    </div>
     <button class="menu-btn" onclick="resumeGame()">RESUME</button>
+    <button class="menu-btn" onclick="quickRestart()">QUICK RESTART</button>
     <button class="menu-btn" onclick="openSettings(event)">SETTINGS</button>
     <button class="menu-btn" onclick="location.reload()">MAIN MENU</button>
 </div>
@@ -200,6 +275,34 @@
         </div>
         <input type="range" id="sens-slider" min="0.1" max="5.0" step="0.1" value="1.0" style="width: 100%; cursor: pointer; accent-color: #ff0000;">
     </div>
+    <div style="width: 320px; margin-bottom: 20px; text-align: left;">
+        <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+            <span style="color: #aaa; font-size: 12px;">MASTER VOLUME</span>
+            <span id="vol-val" style="font-size: 12px;">100%</span>
+        </div>
+        <input type="range" id="vol-slider" min="0" max="100" step="1" value="100" style="width: 100%; cursor: pointer; accent-color: #ff0000;">
+    </div>
+    <div style="width: 320px; margin-bottom: 20px; text-align: left;">
+        <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+            <span style="color: #aaa; font-size: 12px;">FIELD OF VIEW</span>
+            <span id="fov-val" style="font-size: 12px;">75</span>
+        </div>
+        <input type="range" id="fov-slider" min="60" max="120" step="1" value="75" style="width: 100%; cursor: pointer; accent-color: #ff0000;">
+    </div>
+    <div style="width: 320px; margin-bottom: 20px; text-align: left;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+            <span style="color: #aaa; font-size: 12px;">SHOW FPS COUNTER</span>
+            <input type="checkbox" id="fps-toggle" style="cursor: pointer; accent-color: #ff0000;">
+        </div>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+            <span style="color: #aaa; font-size: 12px;">SCREEN SHAKE</span>
+            <input type="checkbox" id="shake-toggle" checked style="cursor: pointer; accent-color: #ff0000;">
+        </div>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+            <span style="color: #aaa; font-size: 12px;">AUDIO DISTORTION (HIGH-CUBE)</span>
+            <input type="checkbox" id="distortion-toggle" checked style="cursor: pointer; accent-color: #ff0000;">
+        </div>
+    </div>
     <p style="font-size: 10px; color: #666; margin-bottom: 20px;">CLICK AN ACTION THEN PRESS A KEY</p>
     <button class="menu-btn" onclick="resetToDefaults()" style="margin-bottom: 5px;">RESET TO DEFAULTS</button>
     <button class="menu-btn" onclick="closeSettings()">BACK</button>
@@ -208,7 +311,12 @@
     <div id="mach-text">MACH 1</div>
     <div id="speed-bar-bg"><div id="speed-bar-fill"></div></div>
 </div>
-<div id="ui">Cubes: 0 / 20</div>
+<div id="ui">
+    <div>Cubes: 0 / 20</div>
+    <div id="progress-bar-container" style="width: 100%; height: 4px; background: rgba(255,255,255,0.2); margin-top: 6px; border-radius: 2px; overflow: hidden;">
+        <div id="progress-bar-fill" style="width: 0%; height: 100%; background: #00ff00; transition: width 0.3s;"></div>
+    </div>
+</div>
 <div id="win-screen">
     <h1>YOU COLLECTED THEM ALL</h1>
     <p id="win-sub">...</p>
@@ -247,12 +355,15 @@ window.openSettings = (...a) => openSettings(...a);
 window.closeSettings = (...a) => closeSettings(...a);
 window.resetToDefaults = (...a) => resetToDefaults(...a);
 window.resumeGame = (...a) => resumeGame(...a);
+window.quickRestart = (...a) => quickRestart(...a);
 // ===================== AUDIO =====================
 let audioCtx = null;
 let masterGain, distortionNode, reverbNode;
 let monsterMusicBuffer = null;
 let monsterMusicSource = null;
 let musicLoadPromise = null;
+let musicStartTime = 0;
+let beatDropTriggered = false;
 
 function initAudio() {
     if (audioCtx) return;
@@ -277,7 +388,8 @@ function initAudio() {
         .then(data => audioCtx.decodeAudioData(data))
         .then(buf => {
             monsterMusicBuffer = buf;
-            if (cubesCollected >= MONSTER_THRESHOLD) playMonsterMusic();
+            // Auto-start the monster music immediately only for survival mode.
+            if (gameMode === 'survival') playMonsterMusic();
         })
         .catch(e => console.warn("Monster music failed to load:", e));
 }
@@ -340,7 +452,12 @@ function buildReverb(dur) {
     scheduleBuildReverb(dur);
 }
 
-function getOutput() { return distortionNode || audioCtx.destination; }
+function getOutput() {
+    if (!audioCtx) return null;
+    if (audioDistortionEnabled && distortionNode) return distortionNode;
+    if (reverbNode) return reverbNode;
+    return audioCtx.destination;
+}
 
 function playTone(freq, type, dur, vol, freqEnd) {
     if (!audioCtx) return;
@@ -396,6 +513,8 @@ function playMonsterMusic() {
     monsterMusicSource.loop = true;
     monsterMusicSource.connect(masterGain);
     monsterMusicSource.start();
+    musicStartTime = audioCtx.currentTime;
+    beatDropTriggered = false;
 }
 
 function playAmbientDrone() {
@@ -410,6 +529,18 @@ const scene = new THREE.Scene(); //
 const skyColor = new THREE.Color(0x87CEEB); // Sky blue color
 scene.background = skyColor;
 scene.fog = new THREE.FogExp2(0x87CEEB, 0.0); // Start with no fog
+
+// Skydome: fog only affects geometry, never scene.background directly, so without
+// a sky mesh the air/sky never visibly fogs up no matter how high density goes.
+const skyDomeGeo = new THREE.SphereGeometry(900, 16, 12);
+const skyDomeMat = new THREE.MeshBasicMaterial({
+    color: skyColor,
+    side: THREE.BackSide,
+    fog: true,
+    depthWrite: false
+});
+const skyDome = new THREE.Mesh(skyDomeGeo, skyDomeMat);
+scene.add(skyDome);
 
 const camera = new THREE.PerspectiveCamera(75, innerWidth/innerHeight, 0.1, 2000);
 const player = new THREE.Object3D();
@@ -598,6 +729,7 @@ const CUBE_POSITIONS = generateCubePositionsOnPlatforms(platformData, 20);
 const cubes = [];
 const beacons = [];
 const beaconRings = []; // kept for compatibility (not used for rendering rings anymore)
+const beaconMats = []; // {core, glow} materials per beacon, used by the impact-frame flat mode
 // instanced rings
 let ringDescriptors = [];
 let ringInstanced = null;
@@ -617,6 +749,7 @@ CUBE_POSITIONS.forEach((pos, i) => {
     cube.castShadow = true;
     cube.userData.index = i;
     cube.userData.collected = false;
+    cube.userData.respawnTimer = 0;
     scene.add(cube);
     cubes.push(cube);
 
@@ -653,6 +786,7 @@ CUBE_POSITIONS.forEach((pos, i) => {
     scene.add(beaconGroup);
     beacons.push(beaconGroup);
     beaconRings.push(rings);
+    beaconMats.push({ core: coreMat, glow: glowMat });
 });
 
 // create instanced mesh for rings once descriptors are collected
@@ -1019,6 +1153,136 @@ const vignette = document.getElementById('vignette');
 const ui = document.getElementById('ui');
 const winScreen = document.getElementById('win-screen');
 
+// ===================== ANIME IMPACT FRAME (reusable FX) =====================
+// Mode-agnostic "impact frame" punch: a hard color flash + a burst of radiating
+// speed-lines, with an optional brief hitstop (freeze), screen shake, and a
+// "flat" pass that strips the 3D scene down to a flat 2D-poster look for the
+// duration of the hit — pitch-black platforms, white sky/ground, solid red
+// cubes, solid yellow beacons — the classic anime way of selling a hit.
+// Call it from ANY mode or event; it has no idea what triggered it, so it's
+// safe to reuse for beat drops, monster hits, big collisions, ability pops, etc.
+//
+//   triggerImpactFrame();                                  // default white punch
+//   triggerImpactFrame({ color: '#ff1414', hitstop: 90 });  // red, longer freeze
+//   triggerImpactFrame({ shake: false });                   // no camera shake
+//   triggerImpactFrame({ flat: false });                    // skip the flat 2D look
+//
+// Options:
+//   color    - flash/line tint, any CSS color (default '#ffffff')
+//   duration - total flash+lines lifespan in ms (default 260)
+//   hitstop  - ms to freeze game motion for, 0 disables (default 80)
+//   shake    - whether to punch the canvas with a screen shake (default true)
+//   blend    - CSS mix-blend-mode for the flash layer (default 'screen')
+//   flat     - whether to apply the flat 2D-poster scene look (default true)
+const impactFrameEl = document.getElementById('impact-frame');
+let impactFrameHitstopUntil = 0; // real-world ms timestamp; read each frame in animate()
+
+// ---- Flat 2D-poster scene look -----------------------------------------
+// Kills all lighting (so any lit surface — i.e. every platform, regardless
+// of its normal color — falls to pitch black) and forces the few things
+// that are meant to read as color (sky, ground, beacons) to flat solid
+// values. Cubes and beacons already render via emissive, which ignores
+// lighting entirely, so they stay a clean solid red/yellow once the lights
+// are killed — no per-object color hunting needed.
+let impactFlatModeActive = false;
+let _flatModeSnapshot = null;
+
+function setFlatImpactStyle(active) {
+    if (active === impactFlatModeActive) return;
+    impactFlatModeActive = active;
+
+    if (active) {
+        _flatModeSnapshot = {
+            bg: scene.background.clone(),
+            skyDomeColor: skyDomeMat.color.clone(),
+            fogDensity: scene.fog.density,
+            groundColor: groundMat.color.clone(),
+            groundEmissive: groundMat.emissive.clone(),
+            ambientIntensity: ambientLight.intensity,
+            sunIntensity: sunLight.intensity,
+            flashlightIntensity: flashlight ? flashlight.intensity : null,
+            beacons: beaconMats.map(({ core, glow }) => ({
+                coreOpacity: core.opacity, glowOpacity: glow.opacity
+            })),
+            ringOpacity: ringInstanced ? ringInstanced.material.opacity : null
+        };
+
+        scene.background.setHex(0xffffff);   // sky -> white
+        skyDomeMat.color.setHex(0xffffff);
+        scene.fog.density = 0;                // no haze muddying the flat look
+        groundMat.color.setHex(0xffffff);     // ground -> white
+        groundMat.emissive.setHex(0xffffff);  // ...and unlit, so it stays white with lights off
+        ambientLight.intensity = 0;           // lights off -> every lit surface (platforms) goes black
+        sunLight.intensity = 0;
+        if (flashlight) flashlight.intensity = 0;
+        beaconMats.forEach(({ core, glow }) => { core.opacity = 1; glow.opacity = 1; }); // solid yellow beacons
+        if (ringInstanced) ringInstanced.material.opacity = 1; // solid yellow floating rings
+    } else {
+        const s = _flatModeSnapshot;
+        if (!s) return;
+        scene.background.copy(s.bg);
+        skyDomeMat.color.copy(s.skyDomeColor);
+        // Recompute fog based on current curse state rather than restoring
+        // the pre-impact snapshot. This ensures survival fog updates after
+        // beat drops reflect the current cube count.
+        try { updateCurse(); } catch (e) { scene.fog.density = s.fogDensity; }
+        groundMat.color.copy(s.groundColor);
+        groundMat.emissive.copy(s.groundEmissive);
+        ambientLight.intensity = s.ambientIntensity;
+        sunLight.intensity = s.sunIntensity;
+        if (flashlight && s.flashlightIntensity !== null) flashlight.intensity = s.flashlightIntensity;
+        beaconMats.forEach(({ core, glow }, i) => {
+            core.opacity = s.beacons[i].coreOpacity;
+            glow.opacity = s.beacons[i].glowOpacity;
+        });
+        if (ringInstanced && s.ringOpacity !== null) ringInstanced.material.opacity = s.ringOpacity;
+        _flatModeSnapshot = null;
+    }
+}
+
+function triggerImpactFrame(opts = {}) {
+    const {
+        color = '#ffffff',
+        duration = 240,
+        hitstop = 80,
+        shake = false, //hgf
+        blend = 'screen',
+        flat = true
+    } = opts;
+
+    impactFrameEl.style.setProperty('--impact-color', color);
+    impactFrameEl.style.setProperty('--impact-duration', duration + 'ms');
+    impactFrameEl.style.setProperty('--impact-blend', blend);
+
+    // Restart the CSS animations even if one is already mid-flight.
+    impactFrameEl.classList.remove('firing');
+    void impactFrameEl.offsetWidth; // force reflow so the class re-triggers
+    impactFrameEl.classList.add('firing');
+    clearTimeout(impactFrameEl._hideTimer);
+    impactFrameEl._hideTimer = setTimeout(() => impactFrameEl.classList.remove('firing'), duration + 30);
+
+    if (hitstop > 0) {
+        impactFrameHitstopUntil = performance.now() + hitstop;
+    }
+
+    if (shake && renderer && renderer.domElement) {
+        const canvas = renderer.domElement;
+        canvas.classList.remove('impact-shake');
+        void canvas.offsetWidth;
+        canvas.classList.add('impact-shake');
+        clearTimeout(canvas._shakeTimer);
+        canvas._shakeTimer = setTimeout(() => canvas.classList.remove('impact-shake'), 340);
+    }
+
+    if (flat) {
+        setFlatImpactStyle(true);
+        clearTimeout(window._impactFlatTimer);
+        window._impactFlatTimer = setTimeout(() => setFlatImpactStyle(false), duration);
+    }
+}
+window.triggerImpactFrame = triggerImpactFrame; // exposed so any mode/event can call it
+
+
 const curseMessages = {
     1: "one down.",
     3: "you feel a little cold.",
@@ -1040,15 +1304,30 @@ function showCurseMsg(text, dur=2800) {
 }
 
 function updateCurse() {
-    curseFactor = cubesCollected / 20;
+    // In survival mode the world starts already 'cursed' (thicker fog).
+    // Preserve a baseline curse so temporary visual resets (like the
+    // impact-frame flat style) don't drop fog to zero when cubesCollected
+    // is low. Use the configured survival start value as a minimum.
+    if (gameMode === 'survival') {
+        const SURVIVAL_BASE = 0.7; // matches quickRestart/start baseline
+        curseFactor = Math.max(cubesCollected / 20, SURVIVAL_BASE);
+    } else {
+        curseFactor = cubesCollected / 20;
+    }
 
+    // Skip all scene-color tweaks while an impact-frame's flat 2D look is
+    // active — it owns these properties for its short lifespan and restores
+    // them itself; fighting it here would un-flatten the hit mid-flash.
+    if (!impactFlatModeActive) {
     const skyR = Math.floor(THREE.MathUtils.lerp(0x87, 0x44, curseFactor)); 
     const skyG = Math.floor(THREE.MathUtils.lerp(0xce, 0x00, curseFactor));
     const skyB = Math.floor(THREE.MathUtils.lerp(0xeb, 0x00, curseFactor));
     // avoid creating new Color instances each frame
     scene.background.setRGB(skyR/255, skyG/255, skyB/255);
+    const baseFogDensity = gameMode === 'survival' ? 0.0235 : 0.006; // Survival starts at 14-cube fog level
+    // Update fog color/density from curse factor for all modes (including survival)
     scene.fog.color.setRGB(skyR/255, skyG/255, skyB/255);
-    scene.fog.density = (cubesCollected <= 3) ? 0 : 0.006 + curseFactor * 0.018; // No fog for cubes 1-3
+    scene.fog.density = (curseFactor <= 0.15) ? 0 : baseFogDensity + curseFactor * 0.025;
 
     const vigAlpha = curseFactor * 0.7;
     vignette.style.background = `radial-gradient(ellipse at center, transparent 40%, rgba(${Math.floor(180*curseFactor)},0,0,${vigAlpha}) 100%)`; // Increased red hue
@@ -1065,23 +1344,27 @@ function updateCurse() {
     const gG = Math.floor(THREE.MathUtils.lerp(0xcc, 0x00, curseFactor));
     const gB = Math.floor(THREE.MathUtils.lerp(0x77, 0x00, curseFactor));
     groundMat.color.setRGB(gR/255, gG/255, gB/255);
+    }
 
-    if (audioCtx && distortionNode) {
+    if (audioCtx) {
     if (cubesCollected >= 5) {
         ui.style.color = `rgb(${Math.floor(THREE.MathUtils.lerp(0x35,0xff,curseFactor*2))},${Math.floor(THREE.MathUtils.lerp(0xfc,0x00,(curseFactor)*2))},${Math.floor(THREE.MathUtils.lerp(0x0d,0x00,curseFactor*2))})`;
     }
-
-        distortionNode.curve = makeDistortionCurve(curseFactor * 200);
+        if (audioDistortionEnabled && distortionNode) {
+            distortionNode.curve = makeDistortionCurve(curseFactor * 200);
+        } else if (distortionNode) {
+            distortionNode.curve = makeDistortionCurve(0);
+        }
         buildReverb(0.3 + curseFactor * 2.5);
         masterGain.gain.value = 1.0 + curseFactor * 0.4;
     }
 
-    if (cubesCollected >= MONSTER_THRESHOLD) {
+    if (cubesCollected >= MONSTER_THRESHOLD && (gameMode === 'survival' || cubesCollected > 0)) {
         monsters.forEach(m => m.visible = true);
         playMonsterMusic();
     }
 
-    if (curseFactor > 0.4) {
+    if (curseFactor > 0.4 && !impactFlatModeActive) {
         const tBase = curseFactor - 0.4;
         for (let i = 0; i < obstacles.length; i++) {
             const obs = obstacles[i];
@@ -1093,6 +1376,11 @@ function updateCurse() {
 
 // ===================== PLAYER / PHYSICS =====================
 let mouseSensitivity = 1.0;
+let masterVolume = 1.0;
+let baseFOV = 75;
+let showFPS = false;
+let screenShakeEnabled = true;
+let audioDistortionEnabled = true;
 let keyMapping = {
     forward: 'KeyW',
     backward: 'KeyS',
@@ -1116,9 +1404,28 @@ const actionLabels = {
 };
 
 function loadKeybinds() {
+    const defaultMapping = {
+        forward: 'KeyW',
+        backward: 'KeyS',
+        left: 'KeyA',
+        right: 'KeyD',
+        jump: 'Space',
+        sprint: 'ShiftLeft',
+        slide: 'ControlLeft',
+        ability: 'KeyQ'
+    };
+    
     const saved = localStorage.getItem('redCubeBinds');
     if (saved) {
-        try { keyMapping = JSON.parse(saved); } catch(e) {}
+        try {
+            const savedMapping = JSON.parse(saved);
+            // Start with defaults and override with saved values
+            keyMapping = { ...defaultMapping, ...savedMapping };
+        } catch(e) {
+            keyMapping = { ...defaultMapping };
+        }
+    } else {
+        keyMapping = { ...defaultMapping };
     }
     const savedSens = localStorage.getItem('redCubeSens');
     if (savedSens) {
@@ -1129,12 +1436,56 @@ function loadKeybinds() {
             document.getElementById('sens-val').textContent = mouseSensitivity.toFixed(1);
         }
     }
+    const savedVol = localStorage.getItem('redCubeVolume');
+    if (savedVol) {
+        masterVolume = parseFloat(savedVol);
+        const slider = document.getElementById('vol-slider');
+        if (slider) {
+            slider.value = masterVolume * 100;
+            document.getElementById('vol-val').textContent = Math.round(masterVolume * 100) + '%';
+        }
+        if (masterGain) masterGain.gain.value = masterVolume;
+    }
+    const savedFOV = localStorage.getItem('redCubeFOV');
+    if (savedFOV) {
+        baseFOV = parseFloat(savedFOV);
+        const slider = document.getElementById('fov-slider');
+        if (slider) {
+            slider.value = baseFOV;
+            document.getElementById('fov-val').textContent = baseFOV;
+        }
+        camera.fov = baseFOV;
+        camera.updateProjectionMatrix();
+    }
+    const savedFPS = localStorage.getItem('redCubeShowFPS');
+    if (savedFPS) {
+        showFPS = savedFPS === 'true';
+        const toggle = document.getElementById('fps-toggle');
+        if (toggle) toggle.checked = showFPS;
+    }
+    const savedShake = localStorage.getItem('redCubeScreenShake');
+    if (savedShake) {
+        screenShakeEnabled = savedShake !== 'false';
+        const toggle = document.getElementById('shake-toggle');
+        if (toggle) toggle.checked = screenShakeEnabled;
+    }
+    const savedDist = localStorage.getItem('redCubeDistortion');
+    if (savedDist) {
+        audioDistortionEnabled = savedDist === 'true';
+        const toggle = document.getElementById('distortion-toggle');
+        if (toggle) toggle.checked = audioDistortionEnabled;
+    }
     updateKeybindUI();
 }
 
 function saveKeybinds() {
     localStorage.setItem('redCubeBinds', JSON.stringify(keyMapping));
     localStorage.setItem('redCubeSens', mouseSensitivity.toString());
+    localStorage.setItem('redCubeVolume', masterVolume.toString());
+    localStorage.setItem('redCubeFOV', baseFOV.toString());
+    localStorage.setItem('redCubeShowFPS', showFPS.toString());
+    localStorage.setItem('redCubeScreenShake', screenShakeEnabled.toString());
+    localStorage.setItem('redCubeDistortion', audioDistortionEnabled.toString());
 }
 
 function resetToDefaults() {
@@ -1149,11 +1500,38 @@ function resetToDefaults() {
         ability: 'KeyQ'
     };
     mouseSensitivity = 1.0;
+    masterVolume = 1.0;
+    baseFOV = 75;
+    showFPS = false;
+    screenShakeEnabled = true;
+    audioDistortionEnabled = true;
+    
     const slider = document.getElementById('sens-slider');
     if (slider) {
         slider.value = 1.0;
         document.getElementById('sens-val').textContent = '1.0';
     }
+    const volSlider = document.getElementById('vol-slider');
+    if (volSlider) {
+        volSlider.value = 100;
+        document.getElementById('vol-val').textContent = '100%';
+    }
+    const fovSlider = document.getElementById('fov-slider');
+    if (fovSlider) {
+        fovSlider.value = 75;
+        document.getElementById('fov-val').textContent = '75';
+    }
+    const fpsToggle = document.getElementById('fps-toggle');
+    if (fpsToggle) fpsToggle.checked = false;
+    const shakeToggle = document.getElementById('shake-toggle');
+    if (shakeToggle) shakeToggle.checked = true;
+    const distToggle = document.getElementById('distortion-toggle');
+    if (distToggle) distToggle.checked = true;
+    
+    if (masterGain) masterGain.gain.value = 1.0;
+    camera.fov = 75;
+    camera.updateProjectionMatrix();
+    
     rebindingAction = null;
     saveKeybinds();
     updateKeybindUI();
@@ -1162,6 +1540,40 @@ function resetToDefaults() {
 document.getElementById('sens-slider').addEventListener('input', (e) => {
     mouseSensitivity = parseFloat(e.target.value);
     document.getElementById('sens-val').textContent = mouseSensitivity.toFixed(1);
+    saveKeybinds();
+});
+
+document.getElementById('vol-slider').addEventListener('input', (e) => {
+    masterVolume = parseFloat(e.target.value) / 100;
+    document.getElementById('vol-val').textContent = Math.round(masterVolume * 100) + '%';
+    if (masterGain) masterGain.gain.value = masterVolume;
+    saveKeybinds();
+});
+
+document.getElementById('fov-slider').addEventListener('input', (e) => {
+    baseFOV = parseFloat(e.target.value);
+    document.getElementById('fov-val').textContent = baseFOV;
+    camera.fov = baseFOV;
+    camera.updateProjectionMatrix();
+    saveKeybinds();
+});
+
+document.getElementById('fps-toggle').addEventListener('change', (e) => {
+    showFPS = e.target.checked;
+    saveKeybinds();
+});
+
+document.getElementById('shake-toggle').addEventListener('change', (e) => {
+    screenShakeEnabled = e.target.checked;
+    saveKeybinds();
+});
+
+document.getElementById('distortion-toggle').addEventListener('change', (e) => {
+    audioDistortionEnabled = e.target.checked;
+    // Update runtime routing/curve immediately
+    if (!audioDistortionEnabled && distortionNode) {
+        distortionNode.curve = makeDistortionCurve(0);
+    }
     saveKeybinds();
 });
 
@@ -1223,7 +1635,7 @@ function updateKeybindUI() {
         row.style.alignItems = 'center';
         
         const label = document.createElement('span');
-        label.textContent = actionLabels[action];
+        label.textContent = actionLabels[action] || action;
         label.style.color = '#aaa';
         
         const btn = document.createElement('button');
@@ -1364,15 +1776,112 @@ function resumeGame() {
     document.body.requestPointerLock();
 }
 
+function quickRestart() {
+    // Save current settings
+    const currentMode = gameMode;
+    const currentDiff = difficulty;
+    
+    // Reset player position and state
+    player.position.set(0, playerHeight, 0);
+    velocity.set(0, 0, 0);
+    isSliding = false;
+    slideCooldownTimer = 0;
+    isWallRunning = false;
+    yaw = 0;
+    pitch = 0;
+    camera.rotation.set(0, 0, 0);
+    player.rotation.y = 0;
+    camera.position.set(0, 0, 0);
+    
+    // Reset player state
+    isGrounded = true;
+    wasGroundedLastFrame = true;
+    canDoubleJump = false;
+    isSlideJump = false;
+    cubeBoostTimer = 0;
+    currentPlayerHeight = playerHeight;
+    currentSprintMultiplier = 1.0;
+    isFlying = false;
+    
+    // Reset game progress
+    cubesCollected = 0;
+    curseFactor = gameMode === 'survival' ? 0.7 : 0; // Start at high curse in survival
+    gameTime = 0;
+    gameEnded = false;
+    isJumpscareActive = false;
+    
+    // Reset cubes and beacons
+    cubes.forEach(cube => {
+        cube.userData.collected = false;
+        cube.userData.respawnTimer = 0;
+        cube.visible = true;
+    });
+    beacons.forEach(beacon => beacon.visible = true);
+    
+    // Reset monsters
+    monsters.forEach(m => {
+        const ang = Math.random() * Math.PI * 2;
+        m.position.set(Math.cos(ang) * 200, 0, Math.sin(ang) * 200);
+        m.visible = false;
+        m.userData.stunTimer = 0;
+    });
+    
+    // Reset ability
+    abilityCooldownTimer = 0;
+    
+    // Reset keys
+    keys.w = false;
+    keys.a = false;
+    keys.s = false;
+    keys.d = false;
+    keys.space = false;
+    keys.shift = false;
+    keys.control = false;
+    
+    // Restore settings
+    gameMode = currentMode;
+    difficulty = currentDiff;
+    recomputeMonsterThreshold();
+    
+    // Reset curse effects
+    updateCurse();
+    
+    // Hide menus and request pointer lock
+    pauseMenu.style.display = 'none';
+    winScreen.style.display = 'none';
+    
+    // Force pointer lock
+    document.body.requestPointerLock();
+    
+    // Small delay to ensure pointer lock engages
+    setTimeout(() => {
+        if (!document.pointerLockElement) {
+            document.body.requestPointerLock();
+        }
+    }, 50);
+}
+
 document.addEventListener('pointerlockchange', () => {
     isLocked = document.pointerLockElement === document.body;
     if (!isJumpscareActive && !gameEnded) {
         if (isLocked) {
             instructions.style.display = 'none';
             pauseMenu.style.display = 'none';
+            // Resume audio context if suspended; if music hasn't been started yet
+            // and we meet the monster threshold, start it.
+            if (audioCtx && audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
         } else {
             if (gameStarted) {
                 pauseMenu.style.display = 'block';
+                // Update pause menu stats
+                document.getElementById('pause-cubes').textContent = cubesCollected;
+                document.getElementById('pause-time').textContent = formatTime(gameTime);
+                // Suspend audio while paused so music resumes where it left off
+                if (audioCtx && audioCtx.state === 'running') {
+                    audioCtx.suspend();
+                }
             } else {
                 instructions.style.display = 'block';
             }
@@ -1613,6 +2122,20 @@ window.debug = {
         console.log(`Flying: ${isFlying ? 'ON' : 'OFF'}`);
         console.log(`Monsters spawned: ${monsters.length}`);
         return { cubesCollected, curseFactor, playerPos: player.position, platformCount: platformData.length };
+    },
+    testImpact: function(opts = {}) {
+        const params = {
+            color: '#ffffff',
+            duration: 260,
+            hitstop: 80,
+            shake: true,
+            blend: 'screen',
+            flat: true,
+            ...opts
+        };
+        console.log('💥 Firing test impact frame:', params);
+        triggerImpactFrame(params);
+        return params;
     }
 };
 
@@ -1630,6 +2153,7 @@ console.log('%cdebug.testPattern(array) - Preview a custom pattern in-game', 'co
 console.log('%cdebug.testAtPlayer(array) - Preview pattern directly in front of you', 'color: #0f0;');
 console.log('%cdebug.clearTestPattern() - Remove test pattern', 'color: #0f0;');
 console.log('%cdebug.stats() - Show current game stats', 'color: #0f0;');
+console.log('%cdebug.testImpact(opts) - Fire a test impact frame, e.g. debug.testImpact({color:"#ff1414", hitstop:90, flat:false})', 'color: #0f0;');
 console.log('%c\n📐 PATTERN FORMAT: [width, height, depth, x, y, z, color_hex]', 'color: #ff0; font-weight: bold;');
 console.log('%cExample: [[16, 1, 16, 0, 0, 0, 0x6a8090], [8, 10, 8, 20, 0, 0, 0x3a5060]]', 'color: #ff0;');
 
@@ -1638,6 +2162,9 @@ const clock = new THREE.Clock();
 let timeScale = 1.0;
 let droneTimer = 0;
 let monsterGroanTimer = 0;
+let frameCount = 0;
+let lastFPSUpdate = 0;
+let currentFPS = 60;
 
 const speedContainer = document.getElementById('speed-container');
 const speedBarFill = document.getElementById('speed-bar-fill');
@@ -1660,18 +2187,38 @@ const tmpAxis = new THREE.Vector3();
 let lastUIContent = "";
 function animate() {
     requestAnimationFrame(animate);
-    const dt = Math.min(clock.getDelta(), 0.05) * timeScale;
-    
-    if (isJumpscareActive) { 
-        renderer.render(scene, camera); 
-        return; 
+    const rawDt = Math.min(clock.getDelta(), 0.05);
+    // Brief freeze-frame while an impact-frame hitstop is active (the moment
+    // anime holds the hit before the speed-lines burst). The render call
+    // still runs below so the frozen frame is visible under the flash/lines.
+    const inImpactHitstop = performance.now() < impactFrameHitstopUntil;
+    const dt = inImpactHitstop ? 0 : rawDt * timeScale;
+
+    if (isJumpscareActive) {
+        renderer.render(scene, camera);
+        return;
     }
-    if (!isLocked) { 
-        renderer.render(scene, camera); 
-        return; 
+    if (!isLocked) {
+        renderer.render(scene, camera);
+        return;
     }
 
     gameTime += dt;
+
+    // FPS counter
+    frameCount++;
+    if (gameTime - lastFPSUpdate >= 0.5) {
+        currentFPS = Math.round(frameCount / (gameTime - lastFPSUpdate));
+        frameCount = 0;
+        lastFPSUpdate = gameTime;
+        const fpsCounter = document.getElementById('fps-counter');
+        if (fpsCounter && showFPS) {
+            fpsCounter.textContent = currentFPS + ' FPS';
+            fpsCounter.style.display = 'block';
+        } else if (fpsCounter) {
+            fpsCounter.style.display = 'none';
+        }
+    }
     if (gameMode === 'timeattack' || gameMode === 'survival') {
         const timerVal = document.getElementById('run-timer-value');
         if (timerVal) timerVal.textContent = formatTime(gameTime);
@@ -1770,7 +2317,7 @@ function animate() {
     // Shake the meter and camera at high mach
     if (mach >= 3) {
         speedContainer.style.animation = 'mach-shake 0.1s infinite';
-        if (mach === 4) {
+        if (mach === 4 && screenShakeEnabled) {
             camera.position.x += (Math.random() - 0.5) * 0.05;
             camera.position.y += (Math.random() - 0.5) * 0.05;
         }
@@ -1840,7 +2387,7 @@ function animate() {
     }
 
     const totalBoostForFOV = (currentSprintMultiplier * cubeBoostActiveMult) - 1.0;
-    let targetFOV = THREE.MathUtils.lerp(75, 98, totalBoostForFOV / 1.9) + curseFactor * 15;
+    let targetFOV = THREE.MathUtils.lerp(baseFOV, baseFOV + 23, totalBoostForFOV / 1.9) + curseFactor * 15;
     if (isSliding) targetFOV += 26; 
 
     if (Math.abs(camera.fov - targetFOV) > 0.1) {
@@ -2042,7 +2589,7 @@ function animate() {
         }
     }
 
-    if (curseFactor > 0.6) {
+    if (curseFactor > 0.6 && screenShakeEnabled) {
         const shakeAmt = (curseFactor - 0.6) * 0.018;
         camera.position.x += (Math.random()-0.5) * shakeAmt;
         camera.position.y += (Math.random()-0.5) * shakeAmt;
@@ -2051,7 +2598,18 @@ function animate() {
     // cubes update: use distanceToSquared
     for (let i = 0; i < cubes.length; i++) {
         const cube = cubes[i];
-        if (cube.userData.collected) continue;
+        if (cube.userData.collected) {
+            // Survival mode: respawn cubes after 8 seconds
+            if (gameMode === 'survival') {
+                cube.userData.respawnTimer -= dt;
+                if (cube.userData.respawnTimer <= 0) {
+                    cube.userData.collected = false;
+                    cube.visible = true;
+                    beacons[i].visible = true;
+                }
+            }
+            continue;
+        }
         cube.rotation.y += dt * (1 + curseFactor * 2);
         cube.rotation.x += dt * 0.4;
         cube.material.emissiveIntensity = 2.5 + Math.sin(gameTime * 4 + i) * 1.5;
@@ -2064,6 +2622,9 @@ function animate() {
             cube.userData.collected = true;
             cube.visible = false;
             beacons[i].visible = false;
+            if (gameMode === 'survival') {
+                cube.userData.respawnTimer = 8.0; // Respawn after 8 seconds in survival
+            }
             cubesCollected++;
             playCollect(cubesCollected);
             cubeBoostTimer = 2.5; // 2.5 second speed boost on collection
@@ -2217,6 +2778,22 @@ function animate() {
         }
     }
 
+    // Beat drop fog increase at 12 seconds in survival mode
+    if (gameMode === 'survival' && monsterMusicSource && !beatDropTriggered && audioCtx) {
+        const musicTime = audioCtx.currentTime - musicStartTime;
+        if (musicTime >= 12.0) {
+            // Mark beat drop occurred and play impact; don't force fog overrides
+            beatDropTriggered = true;
+            triggerImpactFrame({ color: '#ff1414', duration: 320, hitstop: 90 }); // beat-drop punch
+            // Ensure fog is recalculated after the flat impact effect ends
+            setTimeout(() => {
+                try { updateCurse(); } catch (e) { /* ignore */ }
+            }, 360);
+        }
+    }
+
+    // (No forced red fog tint here — curse-driven fog now applies consistently.)
+
     // Update debug path if enabled
     if (window.debug._pathEnabled) {
         if (!window.debug._pathPoints) window.debug._pathPoints = [];
@@ -2232,14 +2809,29 @@ function animate() {
 
     const moveStatus = isSliding ? 'SLIDING' : (isWallRunning ? 'WALL-RUN' : (isSprinting ? '⚡ SPRINT' : (isGrounded ? 'GROUNDED' : 'AIRBORNE')));
     const flashStatus = flashlightEnabled ? ' 🔦' : '';
-    let uiContent = `Cubes: ${cubesCollected} / 20${flashStatus}<br>[ ${moveStatus} ]`;
-    if (curseFactor > 0.7 && Math.random() < 0.005) {
+    let uiContent = gameMode === 'survival' ? `[ ${moveStatus} ]${flashStatus}` : `Cubes: ${cubesCollected} / 20${flashStatus}<br>[ ${moveStatus} ]`;
+    if (curseFactor > 0.7 && Math.random() < 0.005 && gameMode !== 'survival') {
         uiContent = `̷C̷u̷b̷e̷s̷: ${cubesCollected} / 20<br>[ ${moveStatus} ]`;
     }
 
     if (uiContent !== lastUIContent) {
         ui.innerHTML = uiContent;
         lastUIContent = uiContent;
+    }
+
+    // Update progress bar (hide in survival mode)
+    const progressBar = document.getElementById('progress-bar-fill');
+    if (progressBar) {
+        if (gameMode === 'survival') {
+            progressBar.style.width = '0%';
+        } else {
+            const progress = (cubesCollected / 20) * 100;
+            progressBar.style.width = progress + '%';
+            // Change color based on curse factor
+            const r = Math.floor(THREE.MathUtils.lerp(0, 255, curseFactor));
+            const g = Math.floor(THREE.MathUtils.lerp(255, 0, curseFactor));
+            progressBar.style.background = `rgb(${r}, ${g}, 0)`;
+        }
     }
 
     if (cubesCollected >= 5) {
@@ -2265,6 +2857,8 @@ function animate() {
             b.material.opacity = 1 - progress;
         }
     }
+
+    skyDome.position.copy(player.position);
 
     renderer.render(scene, camera);
 }
@@ -2315,6 +2909,8 @@ function endGame(outcome) {
         monsterMusicSource.stop();
         monsterMusicSource = null;
     }
+    musicStartTime = 0;
+    beatDropTriggered = false;
     document.getElementById('run-timer').style.display = 'none';
     winScreen.style.display = 'flex';
     document.exitPointerLock();
