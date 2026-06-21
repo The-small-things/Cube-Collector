@@ -213,7 +213,7 @@
     <div id="ability-bar-bg"><div id="ability-bar-fill"></div></div>
 </div>
 <div id="run-timer" style="display:none; position:fixed; top:14px; left:50%; transform:translateX(-50%); z-index:10; color:#fff; font-family:monospace; font-size:18px; background:rgba(0,0,0,0.6); padding:6px 16px; border-radius:4px; border:1px solid #444; letter-spacing:1px;">
-    <span id="run-timer-label">TIME</span> <span id="run-timer-value">0:00.0</span>
+    <span id="run-timer-label">TIME</span> <span id="run-timer-value">0:00.0</span><span id="run-timer-mult" style="display:none; margin-left:8px; color:#666; font-size:14px;">×1.00</span>
 </div>
 <div id="fps-counter" style="display:none; position:fixed; top:14px; right:14px; z-index:10; color:#0f0; font-family:monospace; font-size:12px; background:rgba(0,0,0,0.6); padding:4px 8px; border-radius:4px; border:1px solid #0f0;">60 FPS</div>
 <div id="taint-badge" style="display:none; position:fixed; top:14px; left:14px; z-index:10; color:#ff0; background:rgba(0,0,0,0.7); border:1px solid #ff0; font-family:monospace; font-size:11px; padding:5px 9px; letter-spacing:1px;">⚠ DEBUG USED — RUN NOT ELIGIBLE FOR LEADERBOARD</div>
@@ -266,46 +266,108 @@
     <button class="menu-btn" onclick="location.reload()">MAIN MENU</button>
 </div>
 <div id="settings-menu" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.95); z-index:2100; flex-direction:column; align-items:center; justify-content:center; color:#ff0000; font-family:monospace; border:1px solid #ff0000;">
-    <h2 style="letter-spacing:6px; text-shadow:0 0 10px #ff0000; margin-bottom:20px;">KEYBINDINGS</h2>
-    <div id="bind-list" style="margin-bottom:20px; text-align:left; width:320px; background: rgba(20,0,0,0.5); padding: 20px; border: 1px solid #300;"></div>
-    <div style="width: 320px; margin-bottom: 20px; text-align: left;">
-        <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
-            <span style="color: #aaa; font-size: 12px;">MOUSE SENSITIVITY</span>
-            <span id="sens-val" style="font-size: 12px;">1.0</span>
-        </div>
-        <input type="range" id="sens-slider" min="0.1" max="5.0" step="0.1" value="1.0" style="width: 100%; cursor: pointer; accent-color: #ff0000;">
+    <h2 style="letter-spacing:6px; text-shadow:0 0 10px #ff0000; margin-bottom:16px;">SETTINGS</h2>
+
+    <!-- ===================== TAB NAV ===================== -->
+    <div style="display:flex; gap:6px; margin-bottom:18px;">
+        <button class="settings-tab-btn" data-tab="keybinds" onclick="showSettingsTab('keybinds')" style="padding:7px 22px; background:#220000; color:#aaa; border:1px solid #500; cursor:pointer; font-family:monospace; font-size:11px; letter-spacing:2px;">KEYBINDINGS</button>
+        <button class="settings-tab-btn" data-tab="advanced" onclick="showSettingsTab('advanced')" style="padding:7px 22px; background:#220000; color:#aaa; border:1px solid #500; cursor:pointer; font-family:monospace; font-size:11px; letter-spacing:2px;">ADVANCED</button>
     </div>
-    <div style="width: 320px; margin-bottom: 20px; text-align: left;">
-        <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
-            <span style="color: #aaa; font-size: 12px;">MASTER VOLUME</span>
-            <span id="vol-val" style="font-size: 12px;">100%</span>
+
+    <!-- ===================== KEYBINDS TAB ===================== -->
+    <div id="tab-keybinds" style="display:flex; flex-direction:column; align-items:center;">
+        <div id="bind-list" style="margin-bottom:18px; text-align:left; width:460px; background: rgba(20,0,0,0.5); padding: 18px; border: 1px solid #300;"></div>
+        <div style="width: 460px; margin-bottom: 14px; text-align: left;">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                <span style="color: #aaa; font-size: 12px;">MOUSE SENSITIVITY</span>
+                <span id="sens-val" style="font-size: 12px;">1.0</span>
+            </div>
+            <input type="range" id="sens-slider" min="0.1" max="5.0" step="0.1" value="1.0" style="width: 100%; cursor: pointer; accent-color: #ff0000;">
         </div>
-        <input type="range" id="vol-slider" min="0" max="100" step="1" value="100" style="width: 100%; cursor: pointer; accent-color: #ff0000;">
+        <div style="width: 460px; margin-bottom: 14px; text-align: left;">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                <span style="color: #aaa; font-size: 12px;">MASTER VOLUME</span>
+                <span id="vol-val" style="font-size: 12px;">100%</span>
+            </div>
+            <input type="range" id="vol-slider" min="0" max="100" step="1" value="100" style="width: 100%; cursor: pointer; accent-color: #ff0000;">
+        </div>
+        <div style="width: 460px; margin-bottom: 14px; text-align: left;">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                <span style="color: #aaa; font-size: 12px;">FIELD OF VIEW</span>
+                <span id="fov-val" style="font-size: 12px;">75</span>
+            </div>
+            <input type="range" id="fov-slider" min="60" max="120" step="1" value="75" style="width: 100%; cursor: pointer; accent-color: #ff0000;">
+        </div>
+        <div style="width: 460px; margin-bottom: 14px; text-align: left;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <span style="color: #aaa; font-size: 12px;">SHOW FPS COUNTER</span>
+                <input type="checkbox" id="fps-toggle" style="cursor: pointer; accent-color: #ff0000;">
+            </div>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <span style="color: #aaa; font-size: 12px;">SCREEN SHAKE</span>
+                <input type="checkbox" id="shake-toggle" checked style="cursor: pointer; accent-color: #ff0000;">
+            </div>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <span style="color: #aaa; font-size: 12px;">AUDIO DISTORTION (HIGH-CUBE)</span>
+                <input type="checkbox" id="distortion-toggle" checked style="cursor: pointer; accent-color: #ff0000;">
+            </div>
+        </div>
+        <p style="font-size: 10px; color: #666; margin-bottom: 18px;">CLICK AN ACTION THEN PRESS A KEY</p>
     </div>
-    <div style="width: 320px; margin-bottom: 20px; text-align: left;">
-        <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
-            <span style="color: #aaa; font-size: 12px;">FIELD OF VIEW</span>
-            <span id="fov-val" style="font-size: 12px;">75</span>
+
+    <!-- ===================== ADVANCED TAB ===================== -->
+    <div id="tab-advanced" style="display:none; flex-direction:column; align-items:center;">
+        <!-- PERFORMANCE PRESET -->
+        <div style="width: 460px; margin-bottom: 16px; text-align: left;">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                <span style="color: #aaa; font-size: 12px;">PERFORMANCE</span>
+                <span id="perf-val" style="font-size: 12px; color:#ff8800;">MEDIUM</span>
+            </div>
+            <div style="display: flex; gap: 4px;">
+                <button class="perf-btn" data-perf="fast" onclick="setPerformance('fast')" style="flex:1; padding:7px; background:#220000; color:#aaa; border:1px solid #500; cursor:pointer; font-family:monospace; font-size:10px;">FAST</button>
+                <button class="perf-btn" data-perf="medium" onclick="setPerformance('medium')" style="flex:1; padding:7px; background:#220000; color:#aaa; border:1px solid #500; cursor:pointer; font-family:monospace; font-size:10px;">MEDIUM</button>
+                <button class="perf-btn" data-perf="high" onclick="setPerformance('high')" style="flex:1; padding:7px; background:#220000; color:#aaa; border:1px solid #500; cursor:pointer; font-family:monospace; font-size:10px;">HIGH</button>
+            </div>
+            <p style="font-size:9px; color:#555; margin-top:4px;">FAST = lowest pixel ratio, no fog smoothing. HIGH = max pixel ratio, full effects.</p>
         </div>
-        <input type="range" id="fov-slider" min="60" max="120" step="1" value="75" style="width: 100%; cursor: pointer; accent-color: #ff0000;">
+
+        <!-- SFX VOLUME -->
+        <div style="width: 460px; margin-bottom: 16px; text-align: left;">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                <span style="color: #aaa; font-size: 12px;">SFX VOLUME</span>
+                <span id="sfx-val" style="font-size: 12px;">100%</span>
+            </div>
+            <input type="range" id="sfx-slider" min="0" max="100" step="1" value="100" style="width: 100%; cursor: pointer; accent-color: #ff0000;">
+        </div>
+
+        <!-- PARTICLE EFFECTS -->
+        <div style="width: 460px; margin-bottom: 16px; text-align: left;">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                <span style="color: #aaa; font-size: 12px;">PARTICLE EFFECTS</span>
+                <span id="particles-val" style="font-size: 12px; color:#ff8800;">ON</span>
+            </div>
+            <div style="display: flex; gap: 4px;">
+                <button class="particles-btn" data-particles="off" onclick="setParticleEffects('off')" style="flex:1; padding:6px; background:#220000; color:#aaa; border:1px solid #500; cursor:pointer; font-family:monospace; font-size:10px;">OFF</button>
+                <button class="particles-btn" data-particles="low" onclick="setParticleEffects('low')" style="flex:1; padding:6px; background:#220000; color:#aaa; border:1px solid #500; cursor:pointer; font-family:monospace; font-size:10px;">LOW</button>
+                <button class="particles-btn" data-particles="on" onclick="setParticleEffects('on')" style="flex:1; padding:6px; background:#220000; color:#aaa; border:1px solid #500; cursor:pointer; font-family:monospace; font-size:10px;">ON</button>
+            </div>
+        </div>
+
+        <!-- GOD MODE -->
+        <div style="width: 460px; margin-bottom: 18px; text-align: left; display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-top: 1px dashed #400; border-bottom: 1px dashed #400;">
+            <div>
+                <span style="color: #ff4444; font-size: 12px;">GOD MODE</span>
+                <p style="font-size:9px; color:#773333; margin-top:2px;">Invincible + always-fly. Disables leaderboard.</p>
+            </div>
+            <input type="checkbox" id="godmode-toggle" style="cursor: pointer; accent-color: #ff0000; transform: scale(1.3);">
+        </div>
     </div>
-    <div style="width: 320px; margin-bottom: 20px; text-align: left;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-            <span style="color: #aaa; font-size: 12px;">SHOW FPS COUNTER</span>
-            <input type="checkbox" id="fps-toggle" style="cursor: pointer; accent-color: #ff0000;">
-        </div>
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-            <span style="color: #aaa; font-size: 12px;">SCREEN SHAKE</span>
-            <input type="checkbox" id="shake-toggle" checked style="cursor: pointer; accent-color: #ff0000;">
-        </div>
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-            <span style="color: #aaa; font-size: 12px;">AUDIO DISTORTION (HIGH-CUBE)</span>
-            <input type="checkbox" id="distortion-toggle" checked style="cursor: pointer; accent-color: #ff0000;">
-        </div>
+
+    <!-- ===================== SHARED FOOTER BUTTONS ===================== -->
+    <div style="display:flex; gap:10px; margin-top:8px;">
+        <button class="menu-btn" onclick="resetToDefaults()" style="margin-bottom: 5px;">RESET TO DEFAULTS</button>
+        <button class="menu-btn" onclick="closeSettings()" style="margin-bottom: 5px;">BACK</button>
     </div>
-    <p style="font-size: 10px; color: #666; margin-bottom: 20px;">CLICK AN ACTION THEN PRESS A KEY</p>
-    <button class="menu-btn" onclick="resetToDefaults()" style="margin-bottom: 5px;">RESET TO DEFAULTS</button>
-    <button class="menu-btn" onclick="closeSettings()">BACK</button>
 </div>
 <div id="speed-container">
     <div id="mach-text">MACH 1</div>
@@ -354,6 +416,9 @@ window.closeLeaderboard = (...a) => closeLeaderboard(...a);
 window.openSettings = (...a) => openSettings(...a);
 window.closeSettings = (...a) => closeSettings(...a);
 window.resetToDefaults = (...a) => resetToDefaults(...a);
+window.setPerformance = (...a) => setPerformance(...a);
+window.setParticleEffects = (...a) => setParticleEffects(...a);
+window.showSettingsTab = (...a) => showSettingsTab(...a);
 window.resumeGame = (...a) => resumeGame(...a);
 window.quickRestart = (...a) => quickRestart(...a);
 
@@ -650,7 +715,8 @@ function playTone(freq, type, dur, vol, freqEnd) {
     osc.type = type;
     osc.frequency.setValueAtTime(freq * (1 + curseFactor * 0.4 * (Math.random()-0.5)), audioCtx.currentTime);
     if (freqEnd) osc.frequency.exponentialRampToValueAtTime(freqEnd, audioCtx.currentTime + dur);
-    g.gain.setValueAtTime(vol, audioCtx.currentTime);
+    // SFX volume scales the per-call volume (separate from master volume).
+    g.gain.setValueAtTime(vol * sfxVolume, audioCtx.currentTime);
     g.gain.linearRampToValueAtTime(0.001, audioCtx.currentTime + dur);
     osc.connect(g); g.connect(getOutput());
     osc.start(); osc.stop(audioCtx.currentTime + dur);
@@ -664,7 +730,8 @@ function playNoise(dur, vol, filterFreq) {
     for (let i = 0; i < len; i++) d[i] = Math.random()*2-1;
     const src = audioCtx.createBufferSource(); src.buffer = buf;
     const f = audioCtx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = filterFreq;
-    const g = audioCtx.createGain(); g.gain.setValueAtTime(vol, audioCtx.currentTime);
+    // SFX volume scales the per-call volume (separate from master volume).
+    const g = audioCtx.createGain(); g.gain.setValueAtTime(vol * sfxVolume, audioCtx.currentTime);
     g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur);
     src.connect(f); f.connect(g); g.connect(getOutput());
     src.start();
@@ -686,8 +753,87 @@ function playCollect(n) {
 
 function playMonsterSound() {
     if (!audioCtx || curseFactor < 0.8) return;
-    const f = 60 + Math.random()*40;
+    // Deep distorted growl + sub-bass thump
+    const f = 50 + Math.random()*30;
     playTone(f, 'sawtooth', 0.4 + Math.random()*0.4, 0.06 + curseFactor*0.05);
+    playNoise(0.3, 0.04 + curseFactor*0.04, 200);
+}
+
+// NEW: distant whisper — a brittle, breathy hiss that seems to come from nowhere.
+// Used by monsters in the "stalk" state to unnerve the player before they get close.
+function playMonsterWhisper() {
+    if (!audioCtx) return;
+    const dur = 0.6 + Math.random() * 0.6;
+    const len = Math.floor(audioCtx.sampleRate * dur);
+    const buf = audioCtx.createBuffer(1, len, audioCtx.sampleRate);
+    const d = buf.getChannelData(0);
+    // Amplitude-modulated noise = breathy "ssss... hhhh..." texture
+    for (let i = 0; i < len; i++) {
+        const t = i / audioCtx.sampleRate;
+        const env = Math.sin(t * Math.PI / dur);          // rise then fall
+        const mod = 0.5 + 0.5 * Math.sin(t * 38);          // fast tremolo
+        d[i] = (Math.random()*2 - 1) * env * mod * 0.5;
+    }
+    const src = audioCtx.createBufferSource(); src.buffer = buf;
+    const f = audioCtx.createBiquadFilter();
+    f.type = 'bandpass';
+    f.frequency.value = 1800 + Math.random() * 1200;       // sharp sibilance
+    f.Q.value = 6;
+    const g = audioCtx.createGain();
+    g.gain.setValueAtTime(0.001, audioCtx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.05 + curseFactor*0.05, audioCtx.currentTime + 0.1);
+    g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur);
+    src.connect(f); f.connect(g); g.connect(getOutput());
+    src.start();
+}
+
+// NEW: hunting scream — a sudden, jarring, detuned screech used when a monster
+// enters the "lunge" state or transitions into close-range "hunt" mode.
+let _lastScreamTime = 0;
+function playMonsterScream() {
+    if (!audioCtx) return;
+    const now = audioCtx.currentTime;
+    if (now - _lastScreamTime < 0.4) return; // throttle to avoid stacking
+    _lastScreamTime = now;
+    // Two detuned saw oscillators sliding in opposite directions = dissonant shriek
+    const baseF = 380 + Math.random() * 180;
+    const osc1 = audioCtx.createOscillator(); osc1.type = 'sawtooth';
+    osc1.frequency.setValueAtTime(baseF, now);
+    osc1.frequency.exponentialRampToValueAtTime(baseF * 2.2, now + 0.35);
+    osc1.frequency.exponentialRampToValueAtTime(baseF * 0.5, now + 0.9);
+    const osc2 = audioCtx.createOscillator(); osc2.type = 'sawtooth';
+    osc2.frequency.setValueAtTime(baseF * 1.06, now);
+    osc2.frequency.exponentialRampToValueAtTime(baseF * 0.55, now + 0.4);
+    const g = audioCtx.createGain();
+    g.gain.setValueAtTime(0.0001, now);
+    g.gain.exponentialRampToValueAtTime(0.18, now + 0.04);
+    g.gain.exponentialRampToValueAtTime(0.001, now + 0.9);
+    // harsh distortion on the scream
+    const shaper = audioCtx.createWaveShaper();
+    shaper.curve = makeDistortionCurve(80);
+    shaper.oversample = '4x';
+    osc1.connect(shaper); osc2.connect(shaper);
+    shaper.connect(g); g.connect(getOutput());
+    osc1.start(now); osc2.start(now);
+    osc1.stop(now + 0.95); osc2.stop(now + 0.95);
+    // sub-bass thump underneath for physical impact
+    playTone(42, 'sine', 0.5, 0.18, 22);
+}
+
+// NEW: heartbeat — a soft "lub-dub" that plays periodically when any monster
+// is in the "hunt" state near the player. Tempo scales with the closest monster's
+// proximity, so the player feels the panic rise as it closes in.
+let _lastHeartbeatTime = 0;
+function playMonsterHeartbeat(intensity) {
+    if (!audioCtx) return;
+    const now = audioCtx.currentTime;
+    if (now - _lastHeartbeatTime < 0.45) return;
+    _lastHeartbeatTime = now;
+    const vol = 0.04 + intensity * 0.16;
+    const lub = () => playTone(58, 'sine', 0.13, vol);
+    const dub = () => playTone(50, 'sine', 0.11, vol * 0.7);
+    lub();
+    setTimeout(dub, 160);
 }
 
 function playMonsterMusic() {
@@ -1350,6 +1496,119 @@ if (ringDescriptors.length > 0) {
     scene.add(ringInstanced);
 }
 
+// ===================== MONSTER BEACONS =====================
+// Red beacons that follow each monster so the player can track them.
+// Visually DISTINCT from the yellow cube beacons:
+//   Yellow beacons = straight vertical cylinder beam + floating rings going UP
+//   Red monster beacons = inverted cone pointing DOWN + pulsing ground rings
+//                         expanding outward (sonar-ping style)
+// The cone hangs above the monster like a targeting reticle; the ground
+// rings radiate outward from the monster's feet and fade — pulsing
+// continuously to signal "threat is HERE and moving".
+
+const monsterBeacons = []; // { cone, coneMat, rings: [{mesh, mat, phase}], group }
+const MONSTER_BEACON_RING_COUNT = 2; // staggered sonar pings
+const MONSTER_BEACON_RING_MAX_SCALE = 18; // how far the ping expands
+const MONSTER_BEACON_RING_CYCLE = 2.0; // seconds for one ping to complete
+
+// Shared geometries (reused across all monster beacons for performance).
+const monsterBeaconConeGeo = new THREE.ConeGeometry(2.5, 60, 6); // tall thin cone
+// Ring geometry is reused from beaconRingGeo (TorusGeometry) but at a
+// different scale/animation than the yellow beacon rings.
+
+function createMonsterBeacon() {
+    const group = new THREE.Group();
+
+    // --- INVERTED CONE pointing down at the monster ---
+    // Hangs high above the monster, point aimed at the ground. Red
+    // emissive, semi-transparent, flickers like a warning signal.
+    const coneMat = new THREE.MeshBasicMaterial({
+        color: 0xff0000,
+        transparent: true,
+        opacity: 0.25,
+        fog: false,
+        depthWrite: false,
+        side: THREE.DoubleSide
+    });
+    const cone = new THREE.Mesh(monsterBeaconConeGeo, coneMat);
+    cone.position.y = 50;           // high above the monster
+    cone.rotation.x = Math.PI;       // flip so the point faces DOWN
+    group.add(cone);
+
+    // --- PULSING GROUND RINGS (sonar ping) ---
+    // Flat torus rings on the ground that expand outward and fade, then
+    // reset — continuous radar-like ping. Two rings staggered so there's
+    // always one mid-expansion.
+    const rings = [];
+    for (let i = 0; i < MONSTER_BEACON_RING_COUNT; i++) {
+        const ringMat = new THREE.MeshBasicMaterial({
+            color: 0xff0000,
+            transparent: true,
+            opacity: 0,
+            fog: false,
+            depthWrite: false,
+            side: THREE.DoubleSide
+        });
+        const ring = new THREE.Mesh(beaconRingGeo, ringMat);
+        ring.rotation.x = Math.PI / 2; // lay flat on the ground
+        ring.position.y = 0.5;         // just above the floor
+        group.add(ring);
+        rings.push({
+            mesh: ring,
+            mat: ringMat,
+            phase: (i / MONSTER_BEACON_RING_COUNT) * MONSTER_BEACON_RING_CYCLE // stagger
+        });
+    }
+
+    group.visible = false; // hidden until monsters activate
+    scene.add(group);
+    const beacon = { group, cone, coneMat, rings };
+    monsterBeacons.push(beacon);
+    return beacon;
+}
+
+// Update all monster beacons each frame: follow the monster, animate the
+// sonar ping rings, flicker the cone. Called from the main animate loop.
+function updateMonsterBeacons(dt) {
+    const tNow = performance.now() * 0.001;
+    for (let i = 0; i < monsterBeacons.length; i++) {
+        const mb = monsterBeacons[i];
+        const m = monsters[i];
+        if (!m) { mb.group.visible = false; continue; }
+        // Beacon visible only when the monster itself is visible (i.e.
+        // monster threshold reached + not stunned-invisible).
+        mb.group.visible = m.visible;
+
+        if (!m.visible) continue;
+
+        // Follow the monster's XZ position.
+        mb.group.position.x = m.position.x;
+        mb.group.position.z = m.position.z;
+
+        // Cone flicker — irregular warning pulse, intensifies with rage/speed.
+        const rage = m.userData.rage || 0;
+        const speed = m.userData.currentSpeed || 0;
+        const threat = Math.max(rage, Math.min(1, speed / 12));
+        const flickerBase = 0.2 + threat * 0.25;
+        const flickerNoise = (Math.sin(tNow * 13) * 0.5 + 0.5) * 0.15;
+        mb.coneMat.opacity = flickerBase + flickerNoise;
+
+        // Sonar ping rings — expand outward and fade, then reset.
+        for (let r = 0; r < mb.rings.length; r++) {
+            const ring = mb.rings[r];
+            ring.phase += dt;
+            if (ring.phase >= MONSTER_BEACON_RING_CYCLE) {
+                ring.phase -= MONSTER_BEACON_RING_CYCLE;
+            }
+            const progress = ring.phase / MONSTER_BEACON_RING_CYCLE; // 0..1
+            const scale = 0.5 + progress * MONSTER_BEACON_RING_MAX_SCALE;
+            ring.mesh.scale.set(scale, scale, scale);
+            // Bright at the start, fades to zero by mid-cycle.
+            ring.mat.opacity = (1 - progress) * 0.6;
+        }
+    }
+}
+
 // ===================== MONSTERS =====================
 const monsters = [];
 const MONSTER_SPEED_BASE = 5.5;
@@ -1373,47 +1632,389 @@ const sonicBoomGeo = new THREE.TorusGeometry(1, 0.1, 8, 32);
 const sonicBoomMatBase = new THREE.MeshBasicMaterial({ color: 0x00ffff, transparent: true, side: THREE.DoubleSide });
 
 function triggerSonicBoom(pos) {
-    const boom = new THREE.Mesh(sonicBoomGeo, sonicBoomMatBase.clone());
-    boom.position.copy(pos);
-    boom.position.y = 0.5; // Slightly above floor
-    boom.rotation.x = Math.PI / 2;
-    boom.userData.life = 0;
-    scene.add(boom);
-    sonicBooms.push(boom);
+    // Particle effects setting gates the visual ring (audio still plays so
+    // the player always gets the ability feedback even with particles off).
+    if (particleEffectsLevel !== 'off') {
+        const boom = new THREE.Mesh(sonicBoomGeo, sonicBoomMatBase.clone());
+        boom.position.copy(pos);
+        boom.position.y = 0.5; // Slightly above floor
+        boom.rotation.x = Math.PI / 2;
+        boom.userData.life = 0;
+        scene.add(boom);
+        sonicBooms.push(boom);
+    }
     playNoise(0.4, 0.25, 80); // Low thud
     playTone(60, 'sawtooth', 0.5, 0.2, 20); // Bass drop
 }
 
-function createMonster() {
-    // simplified low-poly monster to improve performance
+function createStalker() {
+    // === THE STALKER ===
+    // A tall, gaunt, multi-limbed horror: elongated torso, skull-like head,
+    // hollow glowing eyes, jagged teeth, four reaching arms with claws,
+    // backward-bent animal legs, and a pulsing dark aura.
+    // AI: state-machine (wander → stalk → hunt → lunge) with rage meter.
     const group = new THREE.Group();
-    const S = 3.0 + Math.random() * 1.0; //
-    const mat = new THREE.MeshPhongMaterial({ color: 0x330000, emissive: 0x100000, emissiveIntensity: 0.2 });
-    const body = new THREE.Mesh(new THREE.BoxGeometry(S * 1.2, S * 1.6, S * 0.8), mat);
-    body.position.y = S * 0.9;
-    group.add(body);
+    const S = 3.6 + Math.random() * 1.4; // taller than before
 
-    const eyeMat = new THREE.MeshPhongMaterial({ color: 0x000000, emissive: 0xff0000, emissiveIntensity: 1.0 });
-    const eyeL = new THREE.Mesh(new THREE.SphereGeometry(S * 0.12, 4, 4), eyeMat); // Simplest sphere
-    eyeL.position.set(-S * 0.22, S * 1.15, S * 0.36);
-    group.add(eyeL);
-    const eyeR = eyeL.clone(); eyeR.position.x *= -1; group.add(eyeR); //
+    // ----- materials (cached per-monster so we can modulate them at runtime) -----
+    const fleshMat = new THREE.MeshPhongMaterial({
+        color: 0x0a0306, emissive: 0x180004, emissiveIntensity: 0.5, shininess: 4
+    });
+    const boneMat = new THREE.MeshPhongMaterial({
+        color: 0xb8a08a, emissive: 0x1a0e00, emissiveIntensity: 0.35, shininess: 90
+    });
+    const eyeMat = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+    const socketMat = new THREE.MeshBasicMaterial({ color: 0x000000 });
+    const veinMat = new THREE.MeshBasicMaterial({ color: 0x550000 });
 
-    const legMat = mat;
-    const legL = new THREE.Mesh(new THREE.CylinderGeometry(S * 0.12, S * 0.08, S * 0.9, 6), legMat);
-    legL.position.set(-S * 0.2, S * 0.0, 0);
-    group.add(legL);
-    const legR = legL.clone(); legR.position.x = S * 0.2; group.add(legR);
+    // ----- TORSO: elongated tapered cone, hunched forward -----
+    const torso = new THREE.Mesh(new THREE.CylinderGeometry(S * 0.32, S * 0.62, S * 2.4, 8), fleshMat);
+    torso.position.y = S * 2.5;
+    torso.rotation.x = 0.15; // slight hunch
+    group.add(torso);
 
+    // ----- ribcage: three thin torus rings, exposed bone -----
+    const ribs = [];
+    for (let i = 0; i < 3; i++) {
+        const rib = new THREE.Mesh(new THREE.TorusGeometry(S * (0.45 - i * 0.05), S * 0.035, 4, 10), veinMat);
+        rib.position.y = S * (2.0 + i * 0.45);
+        rib.rotation.x = Math.PI / 2;
+        group.add(rib);
+        ribs.push(rib);
+    }
+
+    // ----- spine bumps down the back -----
+    for (let i = 0; i < 5; i++) {
+        const spike = new THREE.Mesh(new THREE.ConeGeometry(S * 0.06, S * 0.25, 4), boneMat);
+        spike.position.set(0, S * (3.4 - i * 0.4), -S * 0.3);
+        spike.rotation.x = -0.6;
+        group.add(spike);
+    }
+
+    // ----- HEAD: elongated skull, pointed forward -----
+    const headGroup = new THREE.Group();
+    headGroup.position.y = S * 4.1;
+    group.add(headGroup);
+
+    const skull = new THREE.Mesh(new THREE.ConeGeometry(S * 0.42, S * 1.1, 6), fleshMat);
+    skull.rotation.x = Math.PI / 2; // point forward
+    skull.position.z = S * 0.2;
+    headGroup.add(skull);
+
+    // jaw (smaller cone below)
+    const jaw = new THREE.Mesh(new THREE.ConeGeometry(S * 0.32, S * 0.55, 6), fleshMat);
+    jaw.rotation.x = -Math.PI / 2;
+    jaw.position.set(0, -S * 0.15, S * 0.15);
+    headGroup.add(jaw);
+
+    // ----- EYE SOCKETS: deep black holes -----
+    const socketL = new THREE.Mesh(new THREE.SphereGeometry(S * 0.17, 10, 10), socketMat);
+    socketL.position.set(-S * 0.2, S * 0.05, S * 0.42);
+    headGroup.add(socketL);
+    const socketR = socketL.clone(); socketR.position.x = S * 0.2; headGroup.add(socketR);
+
+    // ----- GLOWING EYES: bright red, sit just inside the sockets -----
+    const eyeL = new THREE.Mesh(new THREE.SphereGeometry(S * 0.09, 10, 10), eyeMat);
+    eyeL.position.set(-S * 0.2, S * 0.05, S * 0.5);
+    headGroup.add(eyeL);
+    const eyeR = eyeL.clone(); eyeR.position.x = S * 0.2; headGroup.add(eyeR);
+
+    // eye-glow halos (transparent red spheres around eyes)
+    const haloMatL = new THREE.MeshBasicMaterial({ color: 0xff0000, transparent: true, opacity: 0.35, depthWrite: false });
+    const haloL = new THREE.Mesh(new THREE.SphereGeometry(S * 0.16, 10, 10), haloMatL);
+    haloL.position.copy(eyeL.position);
+    headGroup.add(haloL);
+    const haloR = new THREE.Mesh(new THREE.SphereGeometry(S * 0.16, 10, 10), haloMatL.clone());
+    haloR.position.copy(eyeR.position);
+    headGroup.add(haloR);
+
+    // ----- TEETH: jagged cones lining the jaw -----
+    const teethGroup = new THREE.Group();
+    const numTeeth = 9;
+    for (let i = 0; i < numTeeth; i++) {
+        const tooth = new THREE.Mesh(new THREE.ConeGeometry(S * 0.045, S * 0.22, 4), boneMat);
+        tooth.position.set((i - (numTeeth - 1) / 2) * S * 0.075, -S * 0.05, S * 0.55);
+        tooth.rotation.x = Math.PI; // point down
+        teethGroup.add(tooth);
+    }
+    headGroup.add(teethGroup);
+
+    // ----- ARMS: four long, thin, multi-jointed reaching arms -----
+    const armConfigs = [
+        { side: -1, height:  S * 3.1, length: S * 2.1, fwd: -0.25 },
+        { side:  1, height:  S * 3.1, length: S * 2.1, fwd:  0.25 },
+        { side: -1, height:  S * 2.4, length: S * 1.9, fwd: -0.45 },
+        { side:  1, height:  S * 2.4, length: S * 1.9, fwd:  0.45 }
+    ];
+    const arms = [];
+    armConfigs.forEach((cfg, i) => {
+        const pivot = new THREE.Group();
+        pivot.position.set(cfg.side * S * 0.4, cfg.height, 0);
+        group.add(pivot);
+
+        // upper arm
+        const upper = new THREE.Mesh(new THREE.CylinderGeometry(S * 0.055, S * 0.04, cfg.length, 5), fleshMat);
+        upper.position.y = -cfg.length / 2;
+        pivot.add(upper);
+
+        // elbow joint
+        const elbow = new THREE.Mesh(new THREE.SphereGeometry(S * 0.06, 6, 6), boneMat);
+        elbow.position.y = -cfg.length;
+        pivot.add(elbow);
+
+        // forearm (bent forward)
+        const forearmPivot = new THREE.Group();
+        forearmPivot.position.y = -cfg.length;
+        pivot.add(forearmPivot);
+        const forearm = new THREE.Mesh(new THREE.CylinderGeometry(S * 0.04, S * 0.025, S * 1.2, 5), fleshMat);
+        forearm.position.set(0, -S * 0.6, S * 0.3);
+        forearm.rotation.x = -0.7;
+        forearmPivot.add(forearm);
+
+        // claw fingers (3 long sharp claws)
+        const clawGroup = new THREE.Group();
+        clawGroup.position.set(0, -S * 1.1, S * 0.6);
+        forearmPivot.add(clawGroup);
+        for (let c = 0; c < 3; c++) {
+            const claw = new THREE.Mesh(new THREE.ConeGeometry(S * 0.035, S * 0.5, 4), boneMat);
+            claw.position.set((c - 1) * S * 0.07, -S * 0.25, 0);
+            claw.rotation.x = Math.PI - 0.3;
+            clawGroup.add(claw);
+        }
+
+        arms.push({ pivot, forearmPivot, baseFwd: cfg.fwd, phase: i * Math.PI * 0.5 });
+    });
+
+    // ----- LEGS: backward-bent, animal-like (digitigrade) -----
+    const legs = [];
+    const legConfigs = [{ side: -1 }, { side: 1 }];
+    legConfigs.forEach((cfg, i) => {
+        const pivot = new THREE.Group();
+        pivot.position.set(cfg.side * S * 0.28, S * 1.3, 0);
+        group.add(pivot);
+
+        const thigh = new THREE.Mesh(new THREE.CylinderGeometry(S * 0.09, S * 0.06, S * 1.3, 6), fleshMat);
+        thigh.position.set(0, -S * 0.65, 0);
+        thigh.rotation.z = cfg.side * 0.25;
+        pivot.add(thigh);
+
+        const knee = new THREE.Mesh(new THREE.SphereGeometry(S * 0.07, 6, 6), boneMat);
+        knee.position.set(cfg.side * S * 0.2, -S * 1.3, 0);
+        pivot.add(knee);
+
+        const shinPivot = new THREE.Group();
+        shinPivot.position.set(cfg.side * S * 0.2, -S * 1.3, 0);
+        pivot.add(shinPivot);
+        const shin = new THREE.Mesh(new THREE.CylinderGeometry(S * 0.05, S * 0.025, S * 1.2, 6), fleshMat);
+        shin.position.set(0, -S * 0.6, -S * 0.1);
+        shin.rotation.x = 0.3;
+        shinPivot.add(shin);
+
+        // foot claw
+        const foot = new THREE.Mesh(new THREE.ConeGeometry(S * 0.06, S * 0.4, 4), boneMat);
+        foot.position.set(0, -S * 1.2, S * 0.1);
+        foot.rotation.x = Math.PI / 2;
+        shinPivot.add(foot);
+
+        legs.push({ pivot, shinPivot, phase: i * Math.PI });
+    });
+
+    // ----- DARK AURA: pulsing transparent sphere around the torso -----
+    const auraMat = new THREE.MeshBasicMaterial({
+        color: 0x660005, transparent: true, opacity: 0.18,
+        side: THREE.BackSide, depthWrite: false
+    });
+    const aura = new THREE.Mesh(new THREE.SphereGeometry(S * 2.6, 12, 12), auraMat);
+    aura.position.y = S * 2.6;
+    group.add(aura);
+
+    // ----- spawn position (far from player) -----
     const angle = Math.random() * Math.PI * 2;
     const dist = 200 + Math.random() * 150;
     group.position.set(Math.cos(angle) * dist, 0, Math.sin(angle) * dist);
-    group.userData.groanTimer = Math.random() * 4;
-    group.userData.scale = S;
-    group.userData.limbPhase = Math.random() * Math.PI * 2;
+
+    group.userData = {
+        kind: 'stalker',
+        scale: S,
+        limbPhase: Math.random() * Math.PI * 2,
+        groanTimer: Math.random() * 4,
+        stunTimer: 0,
+        // ---- AI state ----
+        aiState: 'wander',
+        stateTimer: 0,
+        wanderTarget: new THREE.Vector3(
+            group.position.x + (Math.random() - 0.5) * 100,
+            0,
+            group.position.z + (Math.random() - 0.5) * 100
+        ),
+        nextWanderUpdate: 3 + Math.random() * 4,
+        stalkDir: Math.random() < 0.5 ? 1 : -1,
+        rage: 0,                 // 0..1, builds while seeing the player
+        lungeTimer: 0,
+        lungeCooldown: 0,
+        twitchTimer: 0,
+        twitchOffset: new THREE.Vector3(),
+        // ---- refs for animation ----
+        refs: { aura, arms, legs, eyeL, eyeR, haloL, haloR, headGroup, teethGroup, ribs }
+    };
+
     group.visible = false;
     scene.add(group);
     monsters.push(group);
+    createMonsterBeacon(); // red tracking beacon for this Stalker
+    return group;
+}
+
+function createHound() {
+    // === THE HOUND ===
+    // A pale quadrupedal beast that ALWAYS knows where the player is.
+    // Momentum-based AI: accelerates while running in a straight line,
+    // decelerates hard when forced to turn. Visually distinct from the
+    // Stalker — low-slung quadruped, single cyclops eye, lolling tongue,
+    // bony ribs and spine, pale hide vs. the Stalker's dark red flesh.
+    const group = new THREE.Group();
+    const S = 2.6 + Math.random() * 0.6; // lower to the ground than Stalker
+
+    // ----- materials -----
+    const hideMat = new THREE.MeshPhongMaterial({
+        color: 0x9a8c78, emissive: 0x140c08, emissiveIntensity: 0.4, shininess: 8
+    });
+    const boneMat = new THREE.MeshPhongMaterial({
+        color: 0xe0d4b8, emissive: 0x1a0e00, emissiveIntensity: 0.35, shininess: 90
+    });
+    const eyeMat  = new THREE.MeshBasicMaterial({ color: 0xff2200 });
+    const eyeHaloMat = new THREE.MeshBasicMaterial({
+        color: 0xff3300, transparent: true, opacity: 0.45, depthWrite: false
+    });
+    const tongueMat = new THREE.MeshPhongMaterial({
+        color: 0x4a0008, emissive: 0x300000, emissiveIntensity: 0.7
+    });
+
+    // ----- BODY: low, horizontal, elongated -----
+    const body = new THREE.Mesh(new THREE.BoxGeometry(S * 2.2, S * 1.0, S * 1.0), hideMat);
+    body.position.y = S * 1.4;
+    group.add(body);
+
+    // ----- exposed ribcage (top of body) -----
+    for (let i = 0; i < 4; i++) {
+        const rib = new THREE.Mesh(new THREE.TorusGeometry(S * (0.5 - i * 0.05), S * 0.04, 4, 8), boneMat);
+        rib.position.set(S * (0.6 - i * 0.4), S * 1.7, 0);
+        rib.rotation.y = Math.PI / 2;
+        group.add(rib);
+    }
+
+    // ----- spine spikes -----
+    for (let i = 0; i < 5; i++) {
+        const spike = new THREE.Mesh(new THREE.ConeGeometry(S * 0.08, S * 0.4, 4), boneMat);
+        spike.position.set(S * (0.8 - i * 0.4), S * 2.0, 0);
+        spike.rotation.x = -0.2;
+        group.add(spike);
+    }
+
+    // ----- HEAD: forward wedge with a single huge eye -----
+    const headGroup = new THREE.Group();
+    headGroup.position.set(S * 1.3, S * 1.5, 0);
+    group.add(headGroup);
+
+    const skull = new THREE.Mesh(new THREE.ConeGeometry(S * 0.55, S * 1.4, 6), hideMat);
+    skull.rotation.z = -Math.PI / 2; // point forward (+x)
+    headGroup.add(skull);
+
+    // cyclops eye
+    const eye = new THREE.Mesh(new THREE.SphereGeometry(S * 0.22, 14, 14), eyeMat);
+    eye.position.set(S * 0.55, 0, 0);
+    headGroup.add(eye);
+    const eyeHalo = new THREE.Mesh(new THREE.SphereGeometry(S * 0.36, 14, 14), eyeHaloMat);
+    eyeHalo.position.copy(eye.position);
+    headGroup.add(eyeHalo);
+    // bony eye socket ring
+    const socket = new THREE.Mesh(new THREE.TorusGeometry(S * 0.28, S * 0.06, 6, 12), boneMat);
+    socket.position.copy(eye.position);
+    socket.rotation.y = Math.PI / 2;
+    headGroup.add(socket);
+
+    // ----- jaws: top + bottom fangs -----
+    for (let side = -1; side <= 1; side += 2) {
+        for (let i = 0; i < 3; i++) {
+            const fang = new THREE.Mesh(new THREE.ConeGeometry(S * 0.06, S * 0.3, 4), boneMat);
+            fang.position.set(S * 1.1, side * S * 0.12, (i - 1) * S * 0.18);
+            fang.rotation.z = side > 0 ? Math.PI : 0;
+            headGroup.add(fang);
+        }
+    }
+
+    // ----- lolling tongue -----
+    const tongue = new THREE.Mesh(new THREE.BoxGeometry(S * 0.6, S * 0.08, S * 0.25), tongueMat);
+    tongue.position.set(S * 1.4, -S * 0.05, 0);
+    headGroup.add(tongue);
+
+    // ----- LEGS: 4 short thick legs -----
+    const legs = [];
+    const legConfigs = [
+        { x:  S * 0.7, z: -S * 0.5, phase: 0 },
+        { x:  S * 0.7, z:  S * 0.5, phase: Math.PI },
+        { x: -S * 0.7, z: -S * 0.5, phase: Math.PI * 0.5 },
+        { x: -S * 0.7, z:  S * 0.5, phase: Math.PI * 1.5 }
+    ];
+    legConfigs.forEach((cfg) => {
+        const pivot = new THREE.Group();
+        pivot.position.set(cfg.x, S * 1.2, cfg.z);
+        group.add(pivot);
+        const upper = new THREE.Mesh(new THREE.CylinderGeometry(S * 0.1, S * 0.07, S * 1.2, 6), hideMat);
+        upper.position.y = -S * 0.6;
+        pivot.add(upper);
+        const paw = new THREE.Mesh(new THREE.SphereGeometry(S * 0.12, 6, 6), boneMat);
+        paw.position.y = -S * 1.2;
+        pivot.add(paw);
+        legs.push({ pivot, phase: cfg.phase });
+    });
+
+    // ----- TAIL: tapered cone trailing behind -----
+    const tailPivot = new THREE.Group();
+    tailPivot.position.set(-S * 1.1, S * 1.5, 0);
+    group.add(tailPivot);
+    const tail = new THREE.Mesh(new THREE.ConeGeometry(S * 0.18, S * 1.8, 6), hideMat);
+    tail.position.set(-S * 0.9, 0, 0);
+    tail.rotation.z = Math.PI / 2;
+    tailPivot.add(tail);
+
+    // ----- AURA: pale grey, pulses with current speed -----
+    const auraMat = new THREE.MeshBasicMaterial({
+        color: 0x886644, transparent: true, opacity: 0.12,
+        side: THREE.BackSide, depthWrite: false
+    });
+    const aura = new THREE.Mesh(new THREE.SphereGeometry(S * 2.0, 12, 12), auraMat);
+    aura.position.y = S * 1.4;
+    group.add(aura);
+
+    // ----- spawn far from player -----
+    const angle = Math.random() * Math.PI * 2;
+    const dist = 200 + Math.random() * 150;
+    group.position.set(Math.cos(angle) * dist, 0, Math.sin(angle) * dist);
+
+    group.userData = {
+        kind: 'hound',
+        scale: S,
+        limbPhase: Math.random() * Math.PI * 2,
+        groanTimer: Math.random() * 4,
+        stunTimer: 0,
+        // ---- Hound AI: always hunts, momentum-based ----
+        // heading  = current travel direction (unit vector)
+        // currentSpeed = scalar speed along heading
+        // The hound always knows where the player is. It accelerates while
+        // its heading aligns with the direction to the player, and loses
+        // speed proportional to how much it has to turn.
+        heading: new THREE.Vector3(Math.cos(angle), 0, Math.sin(angle)),
+        currentSpeed: 2.5,
+        topSpeed: 12.0, // updated each frame from difficulty
+        // ---- refs for animation ----
+        refs: { aura, eye, eyeHalo, legs, tailPivot, headGroup, tongue }
+    };
+
+    group.visible = false;
+    scene.add(group);
+    monsters.push(group);
+    createMonsterBeacon(); // red tracking beacon for this Hound
     return group;
 }
 
@@ -1432,10 +2033,10 @@ let difficulty = localStorage.getItem('redCubeDifficulty') || 'normal';
 let playerName = localStorage.getItem('redCubeName') || '';
 
 const DIFFICULTY_SETTINGS = {
-    easy:      { monsterThreshold: 15, speedMult: 0.8,  catchMult: 0.8  },
-    normal:    { monsterThreshold: 15, speedMult: 1.0,  catchMult: 1.0  },
-    hard:      { monsterThreshold: 15, speedMult: 1.25, catchMult: 1.1  },
-    nightmare: { monsterThreshold: 15, speedMult: 1.6,  catchMult: 1.25 }
+    easy:      { monsterThreshold: 15, speedMult: 0.8,  catchMult: 0.8,  houndCount: 1 },
+    normal:    { monsterThreshold: 15, speedMult: 1.0,  catchMult: 1.0,  houndCount: 1 },
+    hard:      { monsterThreshold: 15, speedMult: 1.25, catchMult: 1.1,  houndCount: 2 },
+    nightmare: { monsterThreshold: 15, speedMult: 1.6,  catchMult: 1.25, houndCount: 3 }
 };
 
 let MONSTER_THRESHOLD = (gameMode === 'survival') ? 0 : 15;
@@ -1689,7 +2290,8 @@ function useAbility() {
 // ===================== CURSE SYSTEM =====================
 let cubesCollected = 0;
 let curseFactor = 0;
-let gameTime = 0;
+let gameTime = 0;          // game clock — can be scaled by survival time multiplier
+let realTime = 0;          // wall-clock time — immune to survival scaling (for FPS, etc.)
 const curseMsg = document.getElementById('curse-msg');
 const vignette = document.getElementById('vignette');
 const ui = document.getElementById('ui');
@@ -1793,8 +2395,18 @@ function triggerImpactFrame(opts = {}) {
         flat = true
     } = opts;
 
+    // Particle-effects setting gates the visual flash + speed-lines (the
+    // hitstop freeze + camera shake still fire so the impact "punch" is
+    // preserved even with particles fully off).
+    if (particleEffectsLevel === 'off') {
+        if (hitstop > 0) impactFrameHitstopUntil = performance.now() + hitstop;
+        return;
+    }
+    // On 'low', halve the duration so the burst is briefer.
+    const effectiveDuration = particleEffectsLevel === 'low' ? Math.round(duration * 0.5) : duration;
+
     impactFrameEl.style.setProperty('--impact-color', color);
-    impactFrameEl.style.setProperty('--impact-duration', duration + 'ms');
+    impactFrameEl.style.setProperty('--impact-duration', effectiveDuration + 'ms');
     impactFrameEl.style.setProperty('--impact-blend', blend);
 
     // Restart the CSS animations even if one is already mid-flight.
@@ -1802,7 +2414,7 @@ function triggerImpactFrame(opts = {}) {
     void impactFrameEl.offsetWidth; // force reflow so the class re-triggers
     impactFrameEl.classList.add('firing');
     clearTimeout(impactFrameEl._hideTimer);
-    impactFrameEl._hideTimer = setTimeout(() => impactFrameEl.classList.remove('firing'), duration + 30);
+    impactFrameEl._hideTimer = setTimeout(() => impactFrameEl.classList.remove('firing'), effectiveDuration + 30);
 
     if (hitstop > 0) {
         impactFrameHitstopUntil = performance.now() + hitstop;
@@ -1939,6 +2551,11 @@ let baseFOV = 75;
 let showFPS = false;
 let screenShakeEnabled = true;
 let audioDistortionEnabled = true;
+// ---- Advanced settings ----
+let performancePreset = 'medium';   // 'fast' | 'medium' | 'high'
+let sfxVolume = 1.0;                // 0..1, independent of master volume
+let particleEffectsLevel = 'on';    // 'off' | 'low' | 'on'
+let godModeEnabled = false;         // invincible + always-fly; taints run
 let keyMapping = {
     forward: 'KeyW',
     backward: 'KeyS',
@@ -2033,6 +2650,35 @@ function loadKeybinds() {
         const toggle = document.getElementById('distortion-toggle');
         if (toggle) toggle.checked = audioDistortionEnabled;
     }
+    // ---- Advanced settings ----
+    const savedPerf = localStorage.getItem('redCubePerf');
+    if (savedPerf && ['fast', 'medium', 'high'].includes(savedPerf)) {
+        performancePreset = savedPerf;
+    }
+    const savedSfx = localStorage.getItem('redCubeSfx');
+    if (savedSfx !== null) {
+        sfxVolume = parseFloat(savedSfx);
+        const sfxSlider = document.getElementById('sfx-slider');
+        if (sfxSlider) {
+            sfxSlider.value = sfxVolume * 100;
+            document.getElementById('sfx-val').textContent = Math.round(sfxVolume * 100) + '%';
+        }
+    }
+    const savedParticles = localStorage.getItem('redCubeParticles');
+    if (savedParticles && ['off', 'low', 'on'].includes(savedParticles)) {
+        particleEffectsLevel = savedParticles;
+    }
+    const savedGod = localStorage.getItem('redCubeGodMode');
+    if (savedGod === 'true') {
+        // Restore god mode toggle visually — but DON'T auto-activate it on load
+        // (so a stale saved value can't silently taint a new run without the
+        // user re-checking the box this session).
+        const godToggle = document.getElementById('godmode-toggle');
+        if (godToggle) godToggle.checked = false;
+    }
+    updateAdvancedUI();
+    // Apply the loaded performance preset to the renderer ASAP.
+    applyPerformancePreset();
     updateKeybindUI();
 }
 
@@ -2044,6 +2690,105 @@ function saveKeybinds() {
     localStorage.setItem('redCubeShowFPS', showFPS.toString());
     localStorage.setItem('redCubeScreenShake', screenShakeEnabled.toString());
     localStorage.setItem('redCubeDistortion', audioDistortionEnabled.toString());
+    // ---- Advanced settings ----
+    localStorage.setItem('redCubePerf', performancePreset);
+    localStorage.setItem('redCubeSfx', sfxVolume.toString());
+    localStorage.setItem('redCubeParticles', particleEffectsLevel);
+    localStorage.setItem('redCubeGodMode', godModeEnabled.toString());
+}
+
+// ===================== ADVANCED OPTIONS LOGIC =====================
+
+// Performance preset → renderer / quality parameters.
+const PERF_PROFILES = {
+    fast:   { pixelRatio: 0.6, fogSmooth: false, skydomeSegments: 8,  monsterAuraSegs: 6 },
+    medium: { pixelRatio: 1.0, fogSmooth: true,  skydomeSegments: 16, monsterAuraSegs: 12 },
+    high:   { pixelRatio: 1.5, fogSmooth: true,  skydomeSegments: 32, monsterAuraSegs: 16 }
+};
+
+function applyPerformancePreset() {
+    if (typeof renderer === 'undefined' || !renderer) return;
+    const profile = PERF_PROFILES[performancePreset] || PERF_PROFILES.medium;
+    const dpr = Math.min(window.devicePixelRatio || 1, profile.pixelRatio);
+    renderer.setPixelRatio(dpr);
+    renderer.setSize(window.innerWidth, window.innerHeight, false);
+    // Fog smoothing: on 'fast', snap fog color changes instead of lerping
+    // (handled by other systems reading this flag).
+    window._perfFogSmooth = profile.fogSmooth;
+}
+
+function setPerformance(level) {
+    if (!['fast', 'medium', 'high'].includes(level)) return;
+    performancePreset = level;
+    applyPerformancePreset();
+    updateAdvancedUI();
+    saveKeybinds();
+}
+
+function setParticleEffects(level) {
+    if (!['off', 'low', 'on'].includes(level)) return;
+    particleEffectsLevel = level;
+    // If turning fully off, clear any live sonic booms so they don't linger.
+    if (level === 'off') {
+        for (let i = sonicBooms.length - 1; i >= 0; i--) {
+            scene.remove(sonicBooms[i]);
+            sonicBooms.splice(i, 1);
+        }
+    }
+    updateAdvancedUI();
+    saveKeybinds();
+}
+
+function setGodMode(enabled) {
+    godModeEnabled = !!enabled;
+    if (godModeEnabled) {
+        // Same rule as the debug console: taints the run for leaderboard purposes.
+        taintRun('god mode enabled via settings');
+        // Force fly mode on so the player can roam freely.
+        isFlying = true;
+    } else {
+        // Turning god mode off does NOT un-taint the run (same as debug.fly).
+        isFlying = false;
+    }
+    saveKeybinds();
+}
+
+// Refresh the visual state of all advanced-option UI controls to match the
+// current values. Called after load + after any setter.
+function updateAdvancedUI() {
+    // Performance buttons
+    document.querySelectorAll('.perf-btn').forEach(btn => {
+        const active = btn.dataset.perf === performancePreset;
+        btn.style.background = active ? '#660000' : '#220000';
+        btn.style.color = active ? '#ffffff' : '#aaa';
+        btn.style.borderColor = active ? '#ff0000' : '#500';
+    });
+    const perfVal = document.getElementById('perf-val');
+    if (perfVal) perfVal.textContent = performancePreset.toUpperCase();
+
+    // Particle buttons
+    document.querySelectorAll('.particles-btn').forEach(btn => {
+        const active = btn.dataset.particles === particleEffectsLevel;
+        btn.style.background = active ? '#660000' : '#220000';
+        btn.style.color = active ? '#ffffff' : '#aaa';
+        btn.style.borderColor = active ? '#ff0000' : '#500';
+    });
+    const particlesVal = document.getElementById('particles-val');
+    if (particlesVal) {
+        particlesVal.textContent = particleEffectsLevel.toUpperCase();
+        particlesVal.style.color = particleEffectsLevel === 'off' ? '#666' :
+                                   particleEffectsLevel === 'low' ? '#ffaa00' : '#ff8800';
+    }
+
+    // SFX slider
+    const sfxSlider = document.getElementById('sfx-slider');
+    if (sfxSlider) sfxSlider.value = sfxVolume * 100;
+    const sfxVal = document.getElementById('sfx-val');
+    if (sfxVal) sfxVal.textContent = Math.round(sfxVolume * 100) + '%';
+
+    // God mode toggle
+    const godToggle = document.getElementById('godmode-toggle');
+    if (godToggle) godToggle.checked = godModeEnabled;
 }
 
 function resetToDefaults() {
@@ -2063,6 +2808,12 @@ function resetToDefaults() {
     showFPS = false;
     screenShakeEnabled = true;
     audioDistortionEnabled = true;
+    // Advanced defaults
+    performancePreset = 'medium';
+    sfxVolume = 1.0;
+    particleEffectsLevel = 'on';
+    godModeEnabled = false;
+    isFlying = false;
     
     const slider = document.getElementById('sens-slider');
     if (slider) {
@@ -2089,6 +2840,10 @@ function resetToDefaults() {
     if (masterGain) masterGain.gain.value = 1.0;
     camera.fov = 75;
     camera.updateProjectionMatrix();
+    
+    // Apply advanced defaults to renderer/UI
+    applyPerformancePreset();
+    updateAdvancedUI();
     
     rebindingAction = null;
     saveKeybinds();
@@ -2133,6 +2888,20 @@ document.getElementById('distortion-toggle').addEventListener('change', (e) => {
         distortionNode.curve = makeDistortionCurve(0);
     }
     saveKeybinds();
+});
+
+// ---- Advanced option listeners ----
+// SFX volume: scales every SFX tone/noise by multiplying the per-call volume.
+// We hook into the existing playTone/playNoise functions via a global gain
+// node multiplier rather than rewiring each call.
+document.getElementById('sfx-slider').addEventListener('input', (e) => {
+    sfxVolume = parseFloat(e.target.value) / 100;
+    document.getElementById('sfx-val').textContent = Math.round(sfxVolume * 100) + '%';
+    saveKeybinds();
+});
+
+document.getElementById('godmode-toggle').addEventListener('change', (e) => {
+    setGodMode(e.target.checked);
 });
 
 function formatBind(code) {
@@ -2365,8 +3134,15 @@ async function startLoadingSequence() {
     // 3. Pre-spawn Monsters (prevents lag hitch at 17 cubes)
     status.textContent = "Manifesting Horrors...";
     bar.style.width = "85%";
+    // Stalkers: state-machine predators, always 3.
     for (let i = 0; i < 3; i++) {
-        createMonster();
+        createStalker();
+        await new Promise(r => setTimeout(r, 10));
+    }
+    // Hounds: momentum-based trackers, count scales with difficulty.
+    const houndCount = (DIFFICULTY_SETTINGS[difficulty] || DIFFICULTY_SETTINGS.normal).houndCount;
+    for (let i = 0; i < houndCount; i++) {
+        createHound();
         await new Promise(r => setTimeout(r, 10));
     }
     
@@ -2383,6 +3159,9 @@ async function startLoadingSequence() {
             document.getElementById('run-timer-label').textContent = gameMode === 'survival' ? 'SURVIVED' : 'TIME';
             document.getElementById('run-timer-value').textContent = formatTime(0);
             timerEl.style.display = 'block';
+            // Show the time-multiplier indicator only in survival mode.
+            const multEl = document.getElementById('run-timer-mult');
+            if (multEl) multEl.style.display = (gameMode === 'survival') ? 'inline' : 'none';
         } else {
             timerEl.style.display = 'none';
         }
@@ -2403,6 +3182,17 @@ function quickRestart() {
     // impact frames, pending timers, etc.) is reset to a fresh-run state.
     const currentMode = gameMode;
     const currentDiff = difficulty;
+
+    // --- CRITICAL: request pointer lock IMMEDIATELY, before anything else ---
+    // Browsers only honor requestPointerLock() when called inside a user
+    // gesture (the click on the QUICK RESTART button). If we do any other
+    // work first — especially async-style synchronous DOM mutations that
+    // hide the pause menu — some browsers consider the gesture "consumed"
+    // and silently reject the pointer lock request. The result: the game
+    // thinks isLocked=true (because we force it below) but the cursor is
+    // actually still free, so the player can't look around.
+    // Calling it first thing guarantees we're still in the gesture window.
+    try { document.body.requestPointerLock(); } catch (e) { /* may throw if not user-activated */ }
 
     // --- CRITICAL: invalidate all pending run-scoped timers FIRST ---
     // This drops any stale setTimeout callbacks (endGame, jumpscare
@@ -2475,6 +3265,7 @@ function quickRestart() {
                      // correct starting curse for the mode (0 for non-survival,
                      // 0.7 for survival) and apply the matching fog.
     gameTime = 0;
+    realTime = 0;
     gameEnded = false;
     isJumpscareActive = false;
 
@@ -2504,7 +3295,20 @@ function quickRestart() {
         m.position.set(Math.cos(ang) * 200, 0, Math.sin(ang) * 200);
         m.visible = false;
         m.userData.stunTimer = 0;
+        // Reset AI state for the appropriate kind so neither carries
+        // stale hunt/lunge momentum into the new run.
+        if (m.userData.kind === 'hound') {
+            m.userData.currentSpeed = 2.5;
+            m.userData.heading.set(Math.cos(ang), 0, Math.sin(ang));
+        } else {
+            m.userData.aiState = 'wander';
+            m.userData.rage = 0;
+            m.userData.lungeTimer = 0;
+            m.userData.lungeCooldown = 0;
+        }
     });
+    // Hide all monster beacons immediately (don't wait for next animate frame).
+    monsterBeacons.forEach(mb => { mb.group.visible = false; });
 
     // Reset ability
     abilityCooldownTimer = 0;
@@ -2529,7 +3333,7 @@ function quickRestart() {
     // a fresh run of the selected mode.
     updateCurse();
 
-    // --- EXPLICIT FOG RESET ---
+    // --- EXPLICIT FOG + VIGNETTE RESET ---
     // updateCurse() above sets the correct fog density for the starting
     // curse level, but in survival mode the previous run may have left
     // fog density very high (end-game curse ~1.0). We force-set it here
@@ -2545,6 +3349,15 @@ function quickRestart() {
         scene.fog.density = TUNING.fogDensityStart;
     }
     scene.fog.color.copy(scene.background);
+
+    // --- CLEAR PROXIMITY VIGNETTE PULSE ---
+    // The monster AI loop sets vignette.style.boxShadow to a red inset
+    // shadow whenever a monster is within 80 units of the player. That
+    // code only runs when cubesCollected >= MONSTER_THRESHOLD, so on a
+    // fresh run (cubesCollected = 0) it never executes — meaning any
+    // red boxShadow left over from the previous run persists indefinitely.
+    // Force-clear it here so the player sees a clean (curse-only) vignette.
+    if (vignette) vignette.style.boxShadow = '';
 
     // Hide menus and request pointer lock
     pauseMenu.style.display = 'none';
@@ -2566,10 +3379,11 @@ function quickRestart() {
     isLocked = true;
     _lastRestartTime = performance.now();
 
-    // Force pointer lock. Wrap in try/catch — some browsers throw if
-    // called without a user gesture (shouldn't happen since the user
-    // clicked the button, but defensive).
-    try { document.body.requestPointerLock(); } catch (e) { /* may throw if not user-activated */ }
+    // Pointer lock was already requested at the top of quickRestart() while
+    // we were still firmly inside the user-gesture window. The retry below
+    // is a fallback for browsers that didn't engage it on the first call —
+    // note that it may NOT work in some browsers (no user gesture context
+    // at that point), but we try anyway since some browsers do allow it.
 
     // Small delay to ensure pointer lock engages — if it didn't, retry.
     // Also re-assert isLocked = true in case the pointerlockchange
@@ -2633,13 +3447,52 @@ document.addEventListener('pointerlockchange', () => {
     }
 });
 
+// Pointer lock can fail silently (browser policy, missing user gesture,
+// document not focused, etc.). When it does, the player would be stuck
+// with no way to look around and no feedback. Show the pause menu as a
+// fallback — its RESUME button re-issues the pointer lock request from
+// a fresh user-gesture click, which is the only reliable way to re-engage
+// pointer lock after a failed request.
+document.addEventListener('pointerlockerror', () => {
+    // Only surface the prompt if a game is actually running.
+    if (!gameStarted || gameEnded || isJumpscareActive) return;
+    // Drop the forced isLocked so the animate loop doesn't keep running
+    // while the player can't actually look around.
+    isLocked = false;
+    // Show the pause menu — the RESUME button provides a fresh user-gesture
+    // path back into pointer lock.
+    pauseMenu.style.display = 'block';
+    document.getElementById('pause-cubes').textContent = cubesCollected;
+    document.getElementById('pause-time').textContent = formatTime(gameTime);
+});
+
 function openSettings(e) {
     if (e) e.stopPropagation();
     document.getElementById('settings-menu').style.display = 'flex';
+    // Always open on the keybinds tab.
+    showSettingsTab('keybinds');
 }
 
 function closeSettings() {
     document.getElementById('settings-menu').style.display = 'none';
+}
+
+// Switch between the KEYBINDINGS and ADVANCED panels in the settings menu.
+// Also restyles the active tab button so the user can see which panel is shown.
+function showSettingsTab(tab) {
+    const tabs = ['keybinds', 'advanced'];
+    if (!tabs.includes(tab)) tab = 'keybinds';
+    for (const t of tabs) {
+        const panel = document.getElementById('tab-' + t);
+        if (panel) panel.style.display = (t === tab) ? 'flex' : 'none';
+        const btn = document.querySelector(`.settings-tab-btn[data-tab="${t}"]`);
+        if (btn) {
+            const active = (t === tab);
+            btn.style.background = active ? '#660000' : '#220000';
+            btn.style.color = active ? '#ffffff' : '#aaa';
+            btn.style.borderColor = active ? '#ff0000' : '#500';
+        }
+    }
 }
 
 document.addEventListener('mousemove', e => {
@@ -3645,12 +4498,34 @@ function animate() {
 
     gameTime += dt;
 
-    // FPS counter
+    // --- SURVIVAL: TIME ACCELERATION PER CUBE ---
+    // In survival mode, every cube collected compounds a 1.1x multiplier on
+    // the game clock. This makes the displayed "survived time" tick faster
+    // the more cubes you've collected, incentivizing active cube-hunting
+    // over passive hiding. Cubes respawn after 8s in survival, so the
+    // multiplier compounds indefinitely — collecting 20 cubes = ~6.7x time,
+    // 30 cubes = ~17.4x time. The leaderboard score (currentRunTime) is
+    // derived from gameTime, so this scaled value IS the submitted score.
+    //
+    // We only add the BONUS here (the base dt was already added above) so
+    // the multiplier effect compounds cleanly: bonus = dt * (mult - 1).
+    if (gameMode === 'survival' && cubesCollected > 0) {
+        const timeMult = Math.pow(1.1, cubesCollected);
+        gameTime += dt * (timeMult - 1);
+    }
+
+    // realTime tracks wall-clock elapsed time (immune to the survival time
+    // multiplier) so the FPS counter and other real-time-sensitive systems
+    // stay accurate.
+    realTime += dt;
+
+    // FPS counter (uses realTime, NOT gameTime, so survival time-scaling
+    // doesn't inflate the FPS reading).
     frameCount++;
-    if (gameTime - lastFPSUpdate >= 0.5) {
-        currentFPS = Math.round(frameCount / (gameTime - lastFPSUpdate));
+    if (realTime - lastFPSUpdate >= 0.5) {
+        currentFPS = Math.round(frameCount / (realTime - lastFPSUpdate));
         frameCount = 0;
-        lastFPSUpdate = gameTime;
+        lastFPSUpdate = realTime;
         const fpsCounter = document.getElementById('fps-counter');
         if (fpsCounter && showFPS) {
             fpsCounter.textContent = currentFPS + ' FPS';
@@ -3662,6 +4537,26 @@ function animate() {
     if (gameMode === 'timeattack' || gameMode === 'survival') {
         const timerVal = document.getElementById('run-timer-value');
         if (timerVal) timerVal.textContent = formatTime(gameTime);
+        // In survival mode, show the current time multiplier next to the
+        // timer so the player can see the cube-collection bonus building.
+        // 1 cube = 1.1x, 10 cubes = 2.59x, 20 cubes = 6.73x, etc.
+        if (gameMode === 'survival') {
+            const multVal = document.getElementById('run-timer-mult');
+            if (multVal) {
+                const mult = cubesCollected > 0 ? Math.pow(1.1, cubesCollected) : 1;
+                multVal.textContent = `×${mult.toFixed(2)}`;
+                // Color shifts from grey (no bonus) → orange → red as it climbs.
+                if (cubesCollected === 0) {
+                    multVal.style.color = '#666';
+                } else if (mult < 2) {
+                    multVal.style.color = '#ffaa00';
+                } else if (mult < 5) {
+                    multVal.style.color = '#ff6600';
+                } else {
+                    multVal.style.color = '#ff2222';
+                }
+            }
+        }
     }
     droneTimer += dt;
     monsterGroanTimer += dt;
@@ -3929,56 +4824,470 @@ function animate() {
         ringInstanced.instanceMatrix.needsUpdate = true;
     }
 
+    // Update red monster beacons — follow each monster + animate sonar ping.
+    // Always called (even below threshold) so the beacons hide cleanly when
+    // monsters are invisible; the function checks m.visible per-beacon.
+    updateMonsterBeacons(dt);
+
     if (cubesCollected >= MONSTER_THRESHOLD) {
         const diffSettings = DIFFICULTY_SETTINGS[difficulty];
+        // Track the closest any monster got to the player this frame, for the
+        // proximity heartbeat + red vignette pulse (handled below the loop).
+        let closestDistSqThisFrame = Infinity;
+        const playerSpeedSq = velocity.x*velocity.x + velocity.z*velocity.z;
+
         for (let mi = 0; mi < monsters.length; mi++) {
             const m = monsters[mi];
             if (!m.visible) continue;
 
+            // ---- STUNNED (from flare): skip AI, just shudder in place ----
             if (m.userData.stunTimer > 0) {
                 m.userData.stunTimer -= dt;
                 m.position.y = 0;
+                m.rotation.z = Math.sin(performance.now() * 0.025) * 0.18;
+                m.rotation.x = Math.cos(performance.now() * 0.022) * 0.12;
+                // dim eyes while stunned — both kinds
+                if (m.userData.refs) {
+                    if (m.userData.refs.haloL) m.userData.refs.haloL.material.opacity = 0.08;
+                    if (m.userData.refs.haloR) m.userData.refs.haloR.material.opacity = 0.08;
+                    if (m.userData.refs.eyeHalo) m.userData.refs.eyeHalo.material.opacity = 0.08;
+                }
                 continue;
             }
 
             tmpToPlayer.copy(player.position).sub(m.position);
             tmpToPlayer.y = 0;
             const distSq = tmpToPlayer.lengthSq();
-            const S = m.userData.scale || 3.8;
-            const catchRadius = S * 1.8 * diffSettings.catchMult;
-            const catchRadiusSq = catchRadius * catchRadius;
-            const speed = (MONSTER_SPEED_BASE + curseFactor * 3) * (distSq < 60*60 ? 1.3 : 1.0) * diffSettings.speedMult;
+            const dist = Math.sqrt(distSq);
+            if (distSq < closestDistSqThisFrame) closestDistSqThisFrame = distSq;
 
-            if (distSq > 0.0001 && !isJumpscareActive) {
-                tmpToPlayer.normalize();
-                m.position.addScaledVector(tmpToPlayer, speed * dt);
-                m.lookAt(player.position.x, m.position.y, player.position.z);
+            const S = m.userData.scale || 3.8;
+            // Catch radius is sized to be slightly BIGGER than the monster's
+            // physical model so the player gets caught when they're clearly
+            // in contact with it. The multiplier is kind-specific because
+            // the two monsters have very different proportions:
+            //
+            //   Stalker: tall humanoid with 4 long reaching arms (~S*3.7
+            //            reach from center). Hitbox S*3.0 covers the body
+            //            + arm reach + a small contact margin.
+            //
+            //   Hound: long quadruped (~S*4.0 nose-to-tail, S*2.0 forward
+            //            reach). Hitbox S*3.4 covers the full body length
+            //            plus a contact margin. Larger than the Stalker's
+            //            because the Hound is longer than it is tall.
+            //
+            // Both are bigger than the visible model so you can't scrape
+            // the model without getting caught — but not SO big that you
+            // get caught from unreasonable distances.
+            const catchRadiusMult = (m.userData.kind === 'hound') ? 3.4 : 3.0;
+            const catchRadius = S * catchRadiusMult * diffSettings.catchMult;
+            const catchRadiusSq = catchRadius * catchRadius;
+
+            // ---- VERTICAL EXTENT CHECK ----
+            // The horizontal catch check above ignores Y entirely, which
+            // means a player wall-running or jumping 50 units overhead
+            // would still get "caught" if they were horizontally close.
+            // Fix: also require the player's FEET to be within the monster's
+            // vertical extent (plus a small clearance margin). The monster
+            // is always at Y=0, so its vertical extent is [0, monsterTopY].
+            //
+            //   Stalker: skull top ~S*5.2, but it has FOUR long reaching
+            //            arms (~S*3.7 each) that can swipe upward at
+            //            players above it. monsterTopY = S*8.0 makes the
+            //            vertical catch zone extend well above the head,
+            //            so you genuinely can't escape a Stalker by
+            //            jumping or wall-running over it — you have to
+            //            break line of sight horizontally. (S*8.0 ≈ 29-40
+            //            units depending on scale, taller than most
+            //            platforms a player can realistically stand on.)
+            //
+            //   Hound: top of body ~S*1.9 → monsterTopY = S*2.5 (margin)
+            //          You CAN jump over a Hound — it's only ~6 units tall
+            //          and its legs don't reach upward.
+            //
+            // player.position.y is the EYE level; feet are at
+            // player.position.y - currentPlayerHeight. We check feet so
+            // standing on top of a monster still counts as a catch.
+            const monsterTopY = (m.userData.kind === 'hound') ? S * 2.5 : S * 8.0;
+            const playerFeetY = player.position.y - currentPlayerHeight;
+            const verticalSafe = playerFeetY > monsterTopY;
+
+            // ============================================================
+            // KIND-BRANCHED AI
+            //   Stalker: state machine (wander → stalk → hunt → lunge) + rage
+            //   Hound:   always hunts, momentum-based (accel on straights,
+            //            decel on turns) — always knows player position.
+            // Both branches must set `speed` (for animation tempo) and
+            // `newState` (for animation poses + sound selection).
+            // ============================================================
+            let speed = 0;
+            let newState = 'hunt';
+
+            if (m.userData.kind === 'hound') {
+                // ---------------------- HOUND AI ----------------------
+                // The Hound ALWAYS knows where the player is. It accelerates
+                // while its heading aligns with the direction to the player
+                // (running in a straight line) and decelerates in proportion
+                // to how sharply it has to turn. This makes it terrifying in
+                // open terrain but weaker when the player jukes around
+                // obstacles or cuts hard.
+                const HOUND_ACCEL_BASE    = 7.0;   // units/sec² baseline accel when aligned
+                const HOUND_ACCEL_SPEED   = 0.55;  // extra accel per unit of current speed (opens up at speed)
+                const HOUND_DECEL_PER_RAD = 18.0;  // units/sec lost per radian of heading error
+                const HOUND_SPEED_MIN     = 2.5;
+                const HOUND_SPEED_MAX_BASE = 12.0; // top speed before difficulty mult
+                const HOUND_TURN_RATE     = 3.2;   // rad/sec — how fast heading can rotate
+
+                // Lead-prediction target (always knows where player is going).
+                const predictX = player.position.x + velocity.x * 0.25;
+                const predictZ = player.position.z + velocity.z * 0.25;
+                const dxH = predictX - m.position.x;
+                const dzH = predictZ - m.position.z;
+                const dH = Math.sqrt(dxH*dxH + dzH*dzH) || 1;
+                const desiredX = dxH / dH;
+                const desiredZ = dzH / dH;
+
+                // Heading error angle (0 = perfectly aligned, π = opposite)
+                let dot = m.userData.heading.x * desiredX + m.userData.heading.z * desiredZ;
+                dot = THREE.MathUtils.clamp(dot, -1, 1);
+                const angleErr = Math.acos(dot);
+
+                // Accelerate on straights, decelerate on turns.
+                const maxSpeed = HOUND_SPEED_MAX_BASE * diffSettings.speedMult;
+                m.userData.topSpeed = maxSpeed;
+                let speedDelta;
+                if (angleErr < 0.2) {
+                    // Straight-line: accelerate, more aggressively the faster it already goes.
+                    speedDelta = (HOUND_ACCEL_BASE + m.userData.currentSpeed * HOUND_ACCEL_SPEED) * dt;
+                } else {
+                    // Turning: lose speed proportional to angle error.
+                    speedDelta = -HOUND_DECEL_PER_RAD * angleErr * dt;
+                }
+                m.userData.currentSpeed = THREE.MathUtils.clamp(
+                    m.userData.currentSpeed + speedDelta,
+                    HOUND_SPEED_MIN,
+                    maxSpeed
+                );
+
+                // Steer heading gradually toward desired direction (can't snap —
+                // this is what lets a juke actually cost the Hound speed).
+                const factor = 1 - Math.exp(-HOUND_TURN_RATE * dt / Math.max(angleErr, 0.01));
+                const newHX = m.userData.heading.x + (desiredX - m.userData.heading.x) * factor;
+                const newHZ = m.userData.heading.z + (desiredZ - m.userData.heading.z) * factor;
+                const hLen = Math.sqrt(newHX*newHX + newHZ*newHZ) || 1;
+                m.userData.heading.set(newHX / hLen, 0, newHZ / hLen);
+
+                // Move along current heading.
+                if (!isJumpscareActive) {
+                    m.position.x += m.userData.heading.x * m.userData.currentSpeed * dt;
+                    m.position.z += m.userData.heading.z * m.userData.currentSpeed * dt;
+                    // Face the PLAYER directly (not the travel heading) — the
+                    // Hound always knows where you are and locks its gaze on
+                    // you even while momentum carries it sideways during turns.
+                    // This matches the Stalker's facing behavior and keeps the
+                    // cyclops eye + jaws pointed at the prey at all times.
+                    m.lookAt(player.position.x, m.position.y, player.position.z);
+                }
+
+                // Subtle high-speed body roll (no twitch — Hound is purposeful).
+                const speedFrac = m.userData.currentSpeed / maxSpeed;
+                m.rotation.z = Math.sin(performance.now() * 0.018) * speedFrac * 0.06;
+
+                speed = m.userData.currentSpeed;
+                newState = 'hunt'; // Hound is always hunting — used by shared anim/sound
             }
+            else {
+                // ---------------------- STALKER AI ----------------------
+                // ---- RAGE meter: builds while the player is in detection range,
+                //      decays slowly when the player escapes. Higher rage = faster
+                //      top speed and a brighter aura/eyes.
+                if (dist < 90) {
+                    m.userData.rage = Math.min(1, m.userData.rage + dt * 0.18);
+                } else {
+                    m.userData.rage = Math.max(0, m.userData.rage - dt * 0.06);
+                }
+
+                // ---- STATE MACHINE ----
+                //   wander  (dist > 150)  : patrol randomly, low speed
+                //   stalk   (60 < d < 150) : circle the player, occasional whisper
+                //   hunt    (20 < d < 60)  : direct chase with prediction
+                //   lunge   (d < 20)       : telegraphed dash, very fast, short
+                newState = m.userData.aiState;
+                if (dist > 150)        newState = 'wander';
+                else if (dist > 60)    newState = 'stalk';
+                else if (dist > 22)    newState = 'hunt';
+                else                   newState = 'lunge';
+
+                // State transitions: trigger sound effects on entry.
+                if (newState !== m.userData.aiState) {
+                    const prev = m.userData.aiState;
+                    m.userData.aiState = newState;
+                    m.userData.stateTimer = 0;
+                    if (newState === 'hunt' && prev !== 'lunge' && dist < 55 && Math.random() < 0.5) {
+                        playMonsterScream();
+                    }
+                    if (newState === 'lunge') {
+                        m.userData.lungeTimer = 1.0;
+                        playMonsterScream();
+                    }
+                    if (newState === 'stalk' && prev === 'wander' && dist < 120 && Math.random() < 0.35) {
+                        playMonsterWhisper();
+                    }
+                }
+
+                // Lunge cooldown prevents immediate re-lunge after escaping.
+                if (m.userData.lungeCooldown > 0) m.userData.lungeCooldown -= dt;
+
+                // ---- SPEED per state ----
+                const baseSpeed = (MONSTER_SPEED_BASE + curseFactor * 2.5 + m.userData.rage * 3.2) * diffSettings.speedMult;
+                speed = baseSpeed;
+                if (newState === 'wander')      speed *= 0.32;
+                else if (newState === 'stalk')  speed *= 0.62;
+                else if (newState === 'hunt')   speed *= 1.0;
+                else if (newState === 'lunge')  speed *= 1.65;
+
+                // ---- MOVEMENT per state ----
+                if (distSq > 0.0001 && !isJumpscareActive) {
+                    if (newState === 'wander') {
+                        // Pick a new wander target periodically.
+                        m.userData.nextWanderUpdate -= dt;
+                        const wt = m.userData.wanderTarget;
+                        const dxT = wt.x - m.position.x;
+                        const dzT = wt.z - m.position.z;
+                        const dT = Math.sqrt(dxT*dxT + dzT*dzT);
+                        if (dT < 6 || m.userData.nextWanderUpdate <= 0) {
+                            const wa = Math.random() * Math.PI * 2;
+                            const wd = 40 + Math.random() * 90;
+                            wt.set(m.position.x + Math.cos(wa) * wd, 0, m.position.z + Math.sin(wa) * wd);
+                            m.userData.nextWanderUpdate = 4 + Math.random() * 5;
+                        } else {
+                            m.position.x += (dxT / dT) * speed * dt;
+                            m.position.z += (dzT / dT) * speed * dt;
+                        }
+                        m.lookAt(m.position.x + dxT, m.position.y, m.position.z + dzT);
+                    }
+                    else if (newState === 'stalk') {
+                        // Circle the player at a comfortable distance, sometimes
+                        // switching direction to feel predatory and unpredictable.
+                        m.userData.stateTimer += dt;
+                        if (m.userData.stateTimer > 5 + Math.random() * 4) {
+                            m.userData.stalkDir *= -1;
+                            m.userData.stateTimer = 0;
+                            if (Math.random() < 0.4) playMonsterWhisper();
+                        }
+                        const dInv = dist > 0.01 ? 1 / dist : 0;
+                        const radX = tmpToPlayer.x * dInv;
+                        const radZ = tmpToPlayer.z * dInv;
+                        // perpendicular (rotate 90deg) — direction sign sets CW/CCW
+                        const perpX = -radZ * m.userData.stalkDir;
+                        const perpZ =  radX * m.userData.stalkDir;
+                        // pull in / push out to maintain ~90 unit ring
+                        const targetDist = 90;
+                        const radialAdjust = (dist - targetDist) * 0.02;
+                        const moveX = (perpX + radX * radialAdjust) * speed * dt;
+                        const moveZ = (perpZ + radZ * radialAdjust) * speed * dt;
+                        m.position.x += moveX;
+                        m.position.z += moveZ;
+                        // Face the player while circling (head tracks prey).
+                        m.lookAt(player.position.x, m.position.y, player.position.z);
+                    }
+                    else {
+                        // hunt & lunge: chase with lead-prediction based on player velocity.
+                        let leadTime = 0.35;
+                        if (newState === 'lunge') leadTime = 0.15;
+                        const predictX = player.position.x + velocity.x * leadTime;
+                        const predictZ = player.position.z + velocity.z * leadTime;
+                        const dxP = predictX - m.position.x;
+                        const dzP = predictZ - m.position.z;
+                        const dP = Math.sqrt(dxP*dxP + dzP*dzP) || 1;
+                        m.position.x += (dxP / dP) * speed * dt;
+                        m.position.z += (dzP / dP) * speed * dt;
+                        m.lookAt(player.position.x, m.position.y, player.position.z);
+
+                        if (newState === 'lunge') {
+                            m.userData.lungeTimer -= dt;
+                            if (m.userData.lungeTimer <= 0) {
+                                // Lunge spent — drop back to hunt, brief cooldown.
+                                m.userData.aiState = 'hunt';
+                                m.userData.lungeCooldown = 1.5;
+                            }
+                        }
+                    }
+                }
+
+                // ---- TWITCH: hunt/lunge monsters jitter rapidly to feel wrong ----
+                if (newState === 'hunt' || newState === 'lunge') {
+                    m.userData.twitchTimer -= dt;
+                    if (m.userData.twitchTimer <= 0) {
+                        m.userData.twitchOffset.set(
+                            (Math.random() - 0.5) * 0.35,
+                            0,
+                            (Math.random() - 0.5) * 0.35
+                        );
+                        m.userData.twitchTimer = 0.04 + Math.random() * 0.09;
+                    }
+                } else {
+                    m.userData.twitchOffset.multiplyScalar(0.88);
+                }
+                m.position.x += m.userData.twitchOffset.x;
+                m.position.z += m.userData.twitchOffset.z;
+            }
+
             m.position.y = 0;
 
-            m.userData.limbPhase += dt * (2.5 + speed * 0.15);
-            m.rotation.z = Math.sin(m.userData.limbPhase * 0.7) * 0.06;
-            m.rotation.x = Math.sin(m.userData.limbPhase) * 0.04;
+            // ---- ANIMATION: branch by kind ----
+            m.userData.limbPhase += dt * (3 + speed * 0.35);
 
-            m.userData.groanTimer += dt;
-            if (m.userData.groanTimer > 2.5 + Math.random()*3) {
-                m.userData.groanTimer = 0;
-                if (distSq < 100*100) playMonsterSound();
+            const refs = m.userData.refs;
+            if (refs) {
+                if (m.userData.kind === 'hound') {
+                    // Hound: legs pump faster with speed, tail sways, eye brightens,
+                    // tongue waggles, aura intensifies — all driven by currentSpeed.
+                    const speedFrac = m.userData.currentSpeed / (m.userData.topSpeed || 12);
+                    // Body roll (subtle bob at speed)
+                    m.rotation.z = Math.sin(m.userData.limbPhase * 0.7) * 0.04 * speedFrac + m.rotation.z * 0.6;
+                    m.rotation.x = Math.sin(m.userData.limbPhase) * 0.03;
+                    // Legs gallop — phase offset gives a quadrupedal gait
+                    for (let li = 0; li < refs.legs.length; li++) {
+                        const leg = refs.legs[li];
+                        leg.pivot.rotation.x = Math.sin(m.userData.limbPhase * (1 + speedFrac) + leg.phase) * (0.25 + speedFrac * 0.5);
+                    }
+                    // Tail sways faster at speed
+                    if (refs.tailPivot) {
+                        refs.tailPivot.rotation.y = Math.sin(m.userData.limbPhase * 1.3) * (0.2 + speedFrac * 0.4);
+                        refs.tailPivot.rotation.z = Math.sin(m.userData.limbPhase * 0.8) * 0.15;
+                    }
+                    // Head bobs slightly with the gait
+                    if (refs.headGroup) {
+                        refs.headGroup.rotation.z = Math.sin(m.userData.limbPhase * 2) * 0.05;
+                    }
+                    // Tongue wags
+                    if (refs.tongue) {
+                        refs.tongue.rotation.y = Math.sin(m.userData.limbPhase * 2.5) * 0.2;
+                    }
+                    // Aura pulses with speed
+                    const tNow = performance.now() * 0.005;
+                    const auraPulse = 1 + Math.sin(tNow * (2 + speedFrac * 4)) * 0.1;
+                    refs.aura.scale.set(auraPulse, auraPulse, auraPulse);
+                    // Particle-effects setting scales aura opacity (off → invisible).
+                    const auraVisMult = particleEffectsLevel === 'off' ? 0 :
+                                        particleEffectsLevel === 'low' ? 0.4 : 1;
+                    refs.aura.material.opacity = (0.1 + speedFrac * 0.35) * auraVisMult;
+                    // Eye halo brightens with speed
+                    if (refs.eyeHalo) {
+                        refs.eyeHalo.material.opacity = 0.25 + speedFrac * 0.55 + Math.sin(tNow * 8) * 0.06;
+                    }
+                } else {
+                    // Stalker: existing animation — body sway, arm swings, leg pumps,
+                    // aura pulse, eye halos, head tilt, jaw open.
+                    m.rotation.z = Math.sin(m.userData.limbPhase * 0.7) * 0.08 + m.userData.twitchOffset.x * 0.6;
+                    m.rotation.x = Math.sin(m.userData.limbPhase) * 0.05 + m.userData.twitchOffset.z * 0.4;
+
+                    // Arms swing; reach forward when lunging.
+                    const swingAmount = (newState === 'lunge') ? 0.7 :
+                                        (newState === 'hunt')  ? 0.5 : 0.25;
+                    for (let ai = 0; ai < refs.arms.length; ai++) {
+                        const arm = refs.arms[ai];
+                        arm.pivot.rotation.x = Math.sin(m.userData.limbPhase + arm.phase) * swingAmount;
+                        arm.pivot.rotation.z = (newState === 'lunge') ? -0.9 : arm.baseFwd * 0.4;
+                        if (arm.forearmPivot) {
+                            arm.forearmPivot.rotation.x = (newState === 'lunge') ? -0.6 :
+                                                           Math.sin(m.userData.limbPhase * 1.3 + arm.phase) * 0.2;
+                        }
+                    }
+                    // Legs pump.
+                    for (let li = 0; li < refs.legs.length; li++) {
+                        const leg = refs.legs[li];
+                        leg.pivot.rotation.x = Math.sin(m.userData.limbPhase + leg.phase) * 0.35;
+                        if (leg.shinPivot) {
+                            leg.shinPivot.rotation.x = Math.sin(m.userData.limbPhase + leg.phase + 0.6) * 0.45;
+                        }
+                    }
+                    // Aura pulses faster + brighter as rage rises.
+                    const tNow = performance.now() * 0.005;
+                    const pulseRate = 1 + m.userData.rage * 4;
+                    const auraPulse = 1 + Math.sin(tNow * pulseRate) * 0.12;
+                    refs.aura.scale.set(auraPulse, auraPulse, auraPulse);
+                    // Particle-effects setting scales aura opacity (off → invisible).
+                    const auraVisMult = particleEffectsLevel === 'off' ? 0 :
+                                        particleEffectsLevel === 'low' ? 0.4 : 1;
+                    refs.aura.material.opacity = (0.12 + m.userData.rage * 0.3) * auraVisMult;
+                    // Eye halos brighten with rage.
+                    const haloOpacity = 0.25 + m.userData.rage * 0.5 + Math.sin(tNow * 6) * 0.05;
+                    refs.haloL.material.opacity = haloOpacity;
+                    refs.haloR.material.opacity = haloOpacity;
+                    // Head tilts toward player slightly when hunting (predatory lean).
+                    if (refs.headGroup) {
+                        refs.headGroup.rotation.x = (newState === 'hunt' || newState === 'lunge') ? 0.18 : 0.05;
+                    }
+                    // Teeth/jaw open wider when lunging.
+                    if (refs.teethGroup) {
+                        const targetOpen = (newState === 'lunge') ? 0.45 :
+                                           (newState === 'hunt')  ? 0.2 : 0;
+                        refs.teethGroup.rotation.x = (refs.teethGroup.rotation.x || 0) * 0.85 + targetOpen * 0.15;
+                    }
+                }
             }
 
-            if (distSq < catchRadiusSq && !isJumpscareActive) {
+            // ---- SOUND: kind-branched ----
+            m.userData.groanTimer += dt;
+            if (m.userData.kind === 'hound') {
+                // Hound: deep baying pant that gets faster as it gets closer.
+                // At high speed it pants rapidly; at low speed it bay-howls.
+                const speedFrac = m.userData.currentSpeed / (m.userData.topSpeed || 12);
+                const interval = 2.5 - speedFrac * 1.8; // 0.7s at full speed, 2.5s at min
+                if (m.userData.groanTimer > interval + Math.random() * 0.5) {
+                    m.userData.groanTimer = 0;
+                    if (distSq < 140 * 140) {
+                        if (speedFrac > 0.7) {
+                            // Full sprint — fast harsh pants
+                            playTone(80 + Math.random() * 20, 'sawtooth', 0.12, 0.08 + curseFactor * 0.04);
+                            playNoise(0.15, 0.05, 400);
+                        } else {
+                            // Slow bay — long, low, mournful
+                            playTone(45 + Math.random() * 15, 'sawtooth', 0.6, 0.1 + curseFactor * 0.05, 30);
+                            playNoise(0.4, 0.04, 150);
+                        }
+                    }
+                }
+                // Occasional snarl when very close
+                if (distSq < 30 * 30 && Math.random() < 0.01) {
+                    playMonsterScream();
+                }
+            } else {
+                // Stalker: state-dependent groans / whispers / screams
+                const groanInterval = newState === 'lunge' ? 0.6 :
+                                      newState === 'hunt'  ? 1.6 :
+                                      newState === 'stalk' ? 3.5 : 6.0;
+                if (m.userData.groanTimer > groanInterval + Math.random() * 1.5) {
+                    m.userData.groanTimer = 0;
+                    if (distSq < 130 * 130) {
+                        if (newState === 'lunge')                  playMonsterScream();
+                        else if (newState === 'stalk')             playMonsterWhisper();
+                        else                                       playMonsterSound();
+                    }
+                }
+            }
+
+            // ---- CATCH: trigger jumpscare (shared by both kinds) ----
+            // Requires: within horizontal catch radius AND not vertically
+            // safe (player's feet must be within the monster's vertical
+            // extent — see the verticalSafe check above).
+            if (distSq < catchRadiusSq && !verticalSafe && !isJumpscareActive && !godModeEnabled) {
                 isJumpscareActive = true;
                 const jsOverlay = document.getElementById('jumpscare-overlay');
-                
+
                 document.exitPointerLock();
                 isLocked = false;
-                
+
                 jsOverlay.style.display = 'flex';
                 instructions.style.display = 'none';
-                
+
+                // Layered jumpscare audio: noise burst + dual detuned screech + sub drop.
                 playNoise(0.9, 0.6, 250);
                 playTone(45, 'sawtooth', 0.9, 0.5);
                 playTone(90, 'sawtooth', 0.9, 0.3);
+                playMonsterScream();
 
                 trackTimeout(runScopedTimeout(() => {
                     jsOverlay.style.display = 'none';
@@ -4002,11 +5311,48 @@ function animate() {
                         const m2 = monsters[m2i];
                         const ang = Math.random() * Math.PI * 2;
                         m2.position.set(Math.cos(ang) * 200 + player.position.x, 0, Math.sin(ang) * 200 + player.position.z);
+                        // Reset AI state for the appropriate kind so neither
+                        // immediately re-catches the player after the teleport.
+                        if (m2.userData.kind === 'hound') {
+                            // Point the Hound back toward the player but kill its
+                            // momentum — gives the player a brief window to escape.
+                            m2.userData.currentSpeed = 2.5;
+                            const dxRP = player.position.x - m2.position.x;
+                            const dzRP = player.position.z - m2.position.z;
+                            const dRP = Math.sqrt(dxRP*dxRP + dzRP*dzRP) || 1;
+                            m2.userData.heading.set(dxRP / dRP, 0, dzRP / dRP);
+                        } else {
+                            // Stalker: reset state machine + rage + cooldowns.
+                            m2.userData.aiState = 'wander';
+                            m2.userData.rage = 0;
+                            m2.userData.lungeTimer = 0;
+                            m2.userData.lungeCooldown = 2.0;
+                        }
                     }
                     
                     isJumpscareActive = false;
                     instructions.style.display = 'block';
                 }, 1500));
+            }
+        }
+
+        // ---- PROXIMITY AUDIO + VISUAL: heartbeat + vignette pulse driven by
+        //      the closest monster's distance to the player. Skipped during jumpscares.
+        if (!isJumpscareActive && closestDistSqThisFrame !== Infinity) {
+            const closestDist = Math.sqrt(closestDistSqThisFrame);
+            // Heartbeat only triggers when something is within ~80m and hunting.
+            if (closestDist < 80) {
+                const intensity = 1 - (closestDist / 80); // 0..1
+                playMonsterHeartbeat(intensity);
+                // Vignette pulse: scale the existing #vignette element with rage color.
+                if (vignette) {
+                    const pulse = 0.5 + 0.5 * Math.sin(performance.now() * (0.008 + intensity * 0.018));
+                    const v = Math.max(0, intensity * pulse);
+                    vignette.style.boxShadow = `inset 0 0 ${120 + v * 220}px ${30 + v * 120}px rgba(140,0,0,${0.35 + v * 0.5})`;
+                }
+            } else if (vignette) {
+                // Let the normal curse system take over again.
+                vignette.style.boxShadow = '';
             }
         }
     }
@@ -4208,6 +5554,9 @@ window.addEventListener('resize', () => {
     camera.aspect = innerWidth / innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(innerWidth, innerHeight);
+    // Re-apply the performance preset's pixel ratio (in case devicePixelRatio
+    // changed, e.g. window dragged between monitors).
+    applyPerformancePreset();
 });
 
 // Standard 'beforeunload' can trigger permissions violations in some environments.
