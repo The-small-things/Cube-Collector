@@ -356,190 +356,6 @@ window.closeSettings = (...a) => closeSettings(...a);
 window.resetToDefaults = (...a) => resetToDefaults(...a);
 window.resumeGame = (...a) => resumeGame(...a);
 window.quickRestart = (...a) => quickRestart(...a);
-
-// =====================================================================
-// TUNING — single source of truth for all movement & UI parameters
-// =====================================================================
-// Every tunable value lives here. To rebalance the game, edit values in
-// this object only — all the per-system constants below (GRAVITY,
-// JUMP_FORCE, etc.) and all inline magic numbers throughout the movement
-// and UI code are aliases that read from this object.
-//
-// IMPORTANT: this object is declared at the very top of the script so
-// that any code that runs at parse time (makeBox, playerRadius, the
-// obstacle scaling loop, etc.) can safely reference TUNING.* without
-// hitting the const temporal-dead-zone error that would break the page.
-//
-// Sections:
-//   1. CORE MOVEMENT     — gravity, base speed, sprint
-//   2. JUMP              — forces, multipliers, coyote/buffer, var-jump
-//   3. WALL JUMP / RUN   — wall-jump forces, wall-run hang/tilt
-//   4. ACCELERATION      — Quake-style ground/air accel + caps
-//   5. GROUND STEERING   — "W follows camera" turn rate
-//   6. AIR STEERING      — hybrid in-air W steering
-//   7. SLIDE             — duration, boost, friction, dive slam
-//   8. CUBE PARRY        — fling magnitude formula
-//   9. LOOK / MOUSE      — base sens, speed-scaled sens
-//  10. FOV               — speed/sprint/slide/curse FOV curve + cap
-//  11. MACH METER        — speed thresholds + speedometer max
-//  12. CAMERA BOB        — head bob amplitude, slide drop
-//  13. PLAYER            — height, radius, spawn Y
-//  14. PHYSICS SAFETY    — substep count/dist (anti-tunneling)
-//  15. OBSTACLES         — size mult, tint, tile settings
-//  16. GROUND            — tint, grass tile repeat
-//  17. START PLATFORM    — size, height
-// =====================================================================
-const TUNING = {
-    // --- 1. CORE MOVEMENT ---
-    gravity: 24.0,              // downward acceleration (u/s²)
-    wallGravity: 3.5,           // gentler gravity while wall-running
-    moveSpeed: 10.0,            // base wish speed (u/s) — sprint multiplies this
-    sprintMult: 2.7,            // target sprint multiplier on wish speed
-    sprintRampRate: 12.0,       // how fast sprint multiplier ramps up (per sec)
-    sprintDecayRate: 8.0,       // how fast sprint multiplier decays on ground (per sec)
-
-    // --- 2. JUMP ---
-    jumpForce: 19.0,            // base jump velocity (u/s). Max height = jumpForce² / (2·gravity)
-    slideJumpMult: 1.3,         // slide-jump = jumpForce * this (slam-storage pop)
-    doubleJumpMult: 1.05,       // double-jump = jumpForce * this
-    doubleJumpForwardKick: 8.0, // forward velocity added on double jump (u/s)
-    tripleJumpMult: 1.0,        // triple-jump = jumpForce * this (only at Mach 4+)
-    tripleJumpForwardKick: 12.0,// forward velocity added on triple jump (u/s)
-    coyoteTime: 0.13,           // grace window after walking off ledge (s)
-    jumpBufferTime: 0.15,       // window for early-jump input before landing (s)
-    variableJumpCutoffVel: 4.0, // release jump above this upward vel → heavier gravity
-    variableJumpGravityMult: 1.8, // gravity multiplier when jump released early
-
-    // --- 3. WALL JUMP / WALL RUN ---
-    wallJumpForceUp: 16.0,      // wall-jump upward velocity
-    wallJumpForceSide: 18.0,    // wall-jump lateral kick (along wall normal)
-    wallJumpForwardBoost: 4.0,  // extra forward kick on wall-jump (u/s)
-    wallRunPopVel: 3.0,         // initial upward pop when first sticking to a wall
-    wallRunMaxFallSpeed: -1.0,  // wall-run max downward velocity (hang effect)
-    wallRunTiltAmount: 0.22,    // camera roll amount while wall-running (radians)
-    wallRunTiltLerp: 14.0,      // how fast camera roll approaches target (per sec)
-
-    // --- 4. ACCELERATION (Quake/Source-style) ---
-    groundAccel: 14.0,          // ground acceleration rate
-    groundFriction: 6.0,        // ground friction when no input (higher = stops faster)
-    airAccel: 90.0,             // air acceleration (high, but capped by airSpeedCap)
-    airSpeedCap: 1.6,           // max wish-speed that air-accel can add (strafe-jump tech)
-    airSpeedSprintMult: 1.6,    // airSpeedCap multiplier while sprinting
-    airSpeedLimit: 75.0,        // hard cap on total air speed (momentum preserved below)
-
-    // --- 5. GROUND STEERING ("W follows camera") ---
-    groundSteerTurnRate: 9.0,   // turn rate at/below wishSpeed (rad/s, ~515°/s)
-    groundSteerMinTurnRate: 3.0,// turn rate at 2x over wishSpeed (rad/s)
-    groundOverSpeedFriction: 1.5, // speed bleed rate when over wishSpeed on ground
-
-    // --- 6. AIR STEERING (hybrid W follows camera) ---
-    airSteerMaxRate: 5.5,       // max air turn rate (rad/s, ~315°/s)
-    airSteerAlignThreshold: 0.25, // alignment above which air steering kicks in
-
-    // --- 7. SLIDE ---
-    slideDuration: 1.6,         // base slide duration (s)
-    slideInitialSpeed: 38.0,    // base slide boost speed
-    slideMaxSpeed: 80.0,        // hard cap on slide boost
-    slideBoostFromSpeedMult: 1.5, // current speed multiplier added to slide boost
-    slideFriction: 0.9,         // slide friction (lower = holds speed longer)
-    slideCooldown: 0.12,        // cooldown between slides (s)
-    slideSteerInfluence: 4.5,   // how much input direction curves a slide
-    slideSteerLerp: 4.5,        // how fast slide velocity blends toward target (per sec)
-    slideDecayExponent: 1.2,    // lower = holds speed longer before tailing off
-    diveSlamSpeed: -26.0,       // initial downward velocity on air-dive (Grace slam)
-    diveGravityMult: 1.9,       // gravity multiplier while dive-sliding
-
-    // --- 8. CUBE PARRY FLING ---
-    parryBase: 55.0,            // base launch magnitude
-    parryHSpeedMult: 1.8,       // current h-speed multiplier added to launch
-    parryFallSpeedMult: 12.0,   // downward velocity multiplier (rewards diving into cube)
-    parryVerticalMult: 1.6,     // vertical launch = jumpForce * this
-
-    // --- 9. LOOK / MOUSE ---
-    baseMouseSens: 0.002,       // base mouse sensitivity scalar
-    curseMouseSensAdd: 0.0008,  // sensitivity added per curseFactor point
-    speedLookMultMax: 1.4,      // max additional sensitivity at top speed (1.0 + this)
-    speedLookMultDivisor: 50,   // hSpeed / this ramps the speed-look mult
-
-    // --- 10. FOV ---
-    fovSprintBoost: 23,         // max FOV added by sprint multiplier
-    fovSlideBoost: 18,          // FOV added while sliding
-    fovSpeedBoost: 18,          // max FOV added by raw speed
-    fovSpeedStartSpeed: 18,     // h-speed at which speed FOV starts ramping
-    fovSpeedRange: 60,          // h-speed range over which speed FOV ramps to max
-    fovMax: 115,                // hard FOV cap
-    fovLerpRate: 10,            // how fast FOV approaches target (per sec)
-    fovCurseBoost: 15,          // FOV added per curseFactor point
-
-    // --- 11. MACH METER ---
-    mach1Speed: 14,
-    mach2Speed: 28,
-    mach3Speed: 45,
-    mach4Speed: 65,
-    mach5Speed: 85,             // Mach 5 — requires slide-jump chains or parry flings
-    speedOMeterMax: 100,        // h-speed at which the bar is 100% (bumped to fit Mach 5)
-    machPulseMax: 0.15,         // max text scale pulse at full speed
-
-    // --- 12. CAMERA BOB ---
-    bobAmountY: 0.06,           // vertical head bob amplitude
-    bobAmountX: 0.04,           // horizontal head bob amplitude
-    slideCameraDrop: -0.2,      // camera Y offset while sliding
-
-    // --- 13. PLAYER ---
-    playerHeight: 1.8,          // eye height above feet
-    playerRadius: 0.4,          // horizontal collision collision radius
-    spawnY: 3.8,                // initial spawn height (above start platform)
-
-    // --- 14. PHYSICS SAFETY ---
-    maxSubstepDist: 0.4,        // max distance per collision substep (anti-tunneling)
-    maxSubsteps: 12,            // max substeps per frame
-
-    // --- 15. OBSTACLES ---
-    obstacleSizeMult: 1.5,      // global obstacle size multiplier
-    obstacleTint: 0x3a4452,     // dark slate blue-grey color multiplier
-    obstacleTileWorldSize: 4,   // world units per texture tile on obstacles
-    obstacleTextureAniso: 8,    // anisotropic filter level for obstacle textures
-    obstacleMinDistBetween: 200,// base min distance between pattern centers (scaled by sizeMult)
-
-    // --- 16. GROUND ---
-    groundTint: 0x4a5238,       // dark olive color multiplier for grass
-    grassTileRepeat: 125,       // grass texture tile count across map
-
-    // --- 17. START PLATFORM ---
-    startPlatformSize: 30,      // width & depth
-    startPlatformHeight: 1.5,   // height
-    startPlatformColor: 0x888888,
-
-    // --- 18. LIGHTING & ATMOSPHERE ---
-    // Global brightness multiplier applied on top of all other lighting.
-    // 1.0 = default. 1.3 = noticeably brighter. 1.6 = very bright / noon sun.
-    // 0.7 = darker, moodier. Affects ambient light, sun light, and sky color.
-    brightnessMult: 1.0,
-    // Ambient light intensity at curse 0 (start of game). Higher = brighter
-    // shadowed areas. The default AmbientLight color is white, so this
-    // directly brightens everything that isn't in direct sunlight.
-    ambientLightStart: 1.0,
-    // Ambient light intensity at curse 1 (all 20 cubes collected). Lower =
-    // shadows get deeper as curse builds.
-    ambientLightEnd: 0.25,
-    // Sun (directional) light intensity at curse 0. Higher = brighter
-    // direct sunlight, sharper shadows.
-    sunLightStart: 1.2,
-    // Sun light intensity at curse 1. Lower = sun fades as curse builds.
-    sunLightEnd: 0.1,
-    // Sky color at curse 0 — bright sky blue (hex 0xRRGGBB).
-    skyColorStart: 0x87ceeb,
-    // Sky color at curse 1 — dark red/black (hex 0xRRGGBB).
-    skyColorEnd: 0x440000,
-    // Fog density at curse 0. 0 = no fog (clear view to horizon).
-    fogDensityStart: 0.0,
-    // Base fog density (added to curse-scaled fog). Higher = hazier map.
-    // Default 0.006 in normal modes, 0.0235 in survival.
-    fogDensityBase: 0.006,
-    // Fog density scaling per curse point. Higher = fog rolls in faster
-    // as you collect cubes.
-    fogDensityPerCurse: 0.025,
-};
 // ===================== AUDIO =====================
 let audioCtx = null;
 let masterGain, distortionNode, reverbNode;
@@ -728,8 +544,7 @@ scene.add(skyDome);
 
 const camera = new THREE.PerspectiveCamera(75, innerWidth/innerHeight, 0.1, 2000);
 const player = new THREE.Object3D();
-// Spawn just above the start platform. Eye level set in TUNING.spawnY.
-player.position.set(0, TUNING.spawnY, 0);
+player.position.set(0, 2, 0);
 player.add(camera);
 scene.add(player); //
 
@@ -742,9 +557,9 @@ renderer.debug.checkShaderErrors = false;
 renderer.shadowMap.enabled = false;
 document.body.appendChild(renderer.domElement);
  //
-const ambientLight = new THREE.AmbientLight(0xffffff, TUNING.ambientLightStart * TUNING.brightnessMult);
+const ambientLight = new THREE.AmbientLight(0xffffff, 0.8); // Slightly lower ambient
 scene.add(ambientLight);
-const sunLight = new THREE.DirectionalLight(0xfff5e0, TUNING.sunLightStart * TUNING.brightnessMult); // Stronger directional sun
+const sunLight = new THREE.DirectionalLight(0xfff5e0, 1.2); // Stronger directional sun
 sunLight.position.set(80, 150, 60);
 scene.add(sunLight);
 
@@ -753,319 +568,16 @@ const obstacles = [];
 const obstacleBoxes = []; // precomputed static boxes
 const MAP_SIZE = 2000; // Large expanded world
 
-// =====================================================================
-// PROCEDURAL GRASS & STONE TEXTURES
-// Generated on a canvas so the file is self-contained (no external
-// grass.jpg / stone.jpg that 404 in sandboxes) AND so we can bake in
-// multi-scale grid lines for altitude perception. The grid pattern is
-// what gives you depth cues when airborne — a single flat color makes
-// it impossible to tell how high you are.
-// =====================================================================
+const textureLoader = new THREE.TextureLoader();
+const grassTex = textureLoader.load('grass.jpg');
+grassTex.wrapS = grassTex.wrapT = THREE.RepeatWrapping;
+grassTex.repeat.set(160, 160); // Scaled texture for larger map
 
-function makeGrassTexture() {
-    const size = 512;
-    const c = document.createElement('canvas');
-    c.width = c.height = size;
-    const ctx = c.getContext('2d');
+const stoneTex = textureLoader.load('stone.jpg');
+stoneTex.wrapS = stoneTex.wrapT = THREE.RepeatWrapping;
 
-    // Base grass color with vertical gradient bands for organic variation
-    const base = ctx.createLinearGradient(0, 0, 0, size);
-    base.addColorStop(0, '#6cb86c');
-    base.addColorStop(0.5, '#5fae5f');
-    base.addColorStop(1, '#73c273');
-    ctx.fillStyle = base;
-    ctx.fillRect(0, 0, size, size);
-
-    // Sprinkle darker grass blades — gives the surface "grain" so motion
-    // is visible even when sprinting at Mach 4.
-    for (let i = 0; i < 1400; i++) {
-        const x = Math.random() * size;
-        const y = Math.random() * size;
-        const len = 3 + Math.random() * 6;
-        const shade = Math.random();
-        ctx.strokeStyle = shade > 0.5
-            ? `rgba(40, 90, 40, ${0.25 + Math.random() * 0.35})`
-            : `rgba(120, 180, 110, ${0.2 + Math.random() * 0.3})`;
-        ctx.lineWidth = 1 + Math.random() * 1.2;
-        ctx.beginPath();
-        ctx.moveTo(x, y);
-        ctx.lineTo(x + (Math.random() - 0.5) * 2, y - len);
-        ctx.stroke();
-    }
-
-    // Clumps of darker moss for larger-scale variation
-    for (let i = 0; i < 40; i++) {
-        const x = Math.random() * size;
-        const y = Math.random() * size;
-        const r = 6 + Math.random() * 14;
-        const g = ctx.createRadialGradient(x, y, 0, x, y, r);
-        g.addColorStop(0, 'rgba(45, 85, 45, 0.45)');
-        g.addColorStop(1, 'rgba(45, 85, 45, 0)');
-        ctx.fillStyle = g;
-        ctx.beginPath();
-        ctx.arc(x, y, r, 0, Math.PI * 2);
-        ctx.fill();
-    }
-
-    // --- ALTITUDE GRID (the actual reason for this texture) ---
-    // Three nested scales of grid lines so at any jump height you can
-    // see distinct marks and gauge how far you are from the ground:
-    //   - Fine:   every 1/8 of the tile (dense, for low-altitude strafing)
-    //   - Medium: every 1/4 of the tile (visible at mid jump height)
-    //   - Bold:   tile border (visible from very high up / slide-jumps)
-    // The pattern tiles 160× across the 2000-unit map, so each tile is
-    // 12.5 units — meaning the medium grid is every ~3 units, bold every
-    // ~12.5 units, fine every ~1.5 units. Plenty of cues at any height.
-    // (Alpha values kept low so the grid reads as a subtle floor pattern,
-    // not a glowing overlay — keeps visual focus on the cubes.)
-
-    // Fine grid (subtle)
-    ctx.strokeStyle = 'rgba(30, 70, 30, 0.10)';
-    ctx.lineWidth = 1;
-    const fine = 8;
-    for (let i = 1; i < fine; i++) {
-        const p = (i / fine) * size;
-        ctx.beginPath(); ctx.moveTo(p, 0); ctx.lineTo(p, size); ctx.stroke();
-        ctx.beginPath(); ctx.moveTo(0, p); ctx.lineTo(size, p); ctx.stroke();
-    }
-
-    // Medium grid (more visible)
-    ctx.strokeStyle = 'rgba(25, 60, 25, 0.18)';
-    ctx.lineWidth = 1.5;
-    const med = 4;
-    for (let i = 1; i < med; i++) {
-        const p = (i / med) * size;
-        ctx.beginPath(); ctx.moveTo(p, 0); ctx.lineTo(p, size); ctx.stroke();
-        ctx.beginPath(); ctx.moveTo(0, p); ctx.lineTo(size, p); ctx.stroke();
-    }
-
-    // Bold border (clearly visible from high up)
-    ctx.strokeStyle = 'rgba(20, 50, 20, 0.28)';
-    ctx.lineWidth = 2;
-    ctx.strokeRect(0, 0, size, size);
-
-    // Corner dots at every tile intersection — visible even at Mach 4
-    // slide-jump altitude but kept dim so they don't draw the eye.
-    ctx.fillStyle = 'rgba(255, 230, 150, 0.35)';
-    ctx.beginPath();
-    ctx.arc(0, 0, 4, 0, Math.PI * 2);
-    ctx.fill();
-
-    const tex = new THREE.CanvasTexture(c);
-    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-    tex.repeat.set(160, 160); // tile 160x across the map
-    tex.anisotropy = 4; // sharper at grazing angles
-    return tex;
-}
-
-function makeStoneTexture() {
-    // --- Seamless procedural stone texture ---
-    // Builds up a believable rock face in layers: granular base → sedimentary
-    // banding → mineral pockets → crack network. All in cool grey-blue tones
-    // so the dim color tint applied later keeps it muted and receding.
-    // 512×512 canvas, designed to tile seamlessly (noise wraps at edges by
-    // drawing blobs that straddle the boundary on each side).
-    const size = 512;
-    const c = document.createElement('canvas');
-    c.width = c.height = size;
-    const ctx = c.getContext('2d');
-
-    // --- Helper: tile-safe random blob (straddles edges so it wraps) ---
-    // Without this, every noise blob that crosses the right/bottom edge
-    // would leave a hard seam. We draw it 4 times: original + 3 wrapped
-    // copies so the texture tiles seamlessly in all directions.
-    function tileSafeBlob(drawBlob) {
-        drawBlob(0, 0);
-        drawBlob(-size, 0); drawBlob(size, 0);
-        drawBlob(0, -size); drawBlob(0, size);
-        drawBlob(-size, -size); drawBlob(size, -size);
-        drawBlob(-size, size); drawBlob(size, size);
-    }
-
-    // 1) Base color: layered diagonal gradient in cool slate tones
-    const base = ctx.createLinearGradient(0, 0, size, size);
-    base.addColorStop(0, '#6c7682');
-    base.addColorStop(0.5, '#7a8492');
-    base.addColorStop(1, '#5e6975');
-    ctx.fillStyle = base;
-    ctx.fillRect(0, 0, size, size);
-
-    // 2) Granular mineral speckle — tiny dots across the whole surface
-    // to give the stone visible "grain" up close.
-    for (let i = 0; i < 4000; i++) {
-        const x = Math.random() * size;
-        const y = Math.random() * size;
-        const r = 0.5 + Math.random() * 1.5;
-        const v = Math.random();
-        // Mix of darker (mineral) and lighter (quartz) grains
-        if (v > 0.6) {
-            ctx.fillStyle = `rgba(40, 48, 58, ${0.2 + Math.random() * 0.3})`;
-        } else if (v > 0.3) {
-            ctx.fillStyle = `rgba(160, 170, 182, ${0.15 + Math.random() * 0.25})`;
-        } else {
-            ctx.fillStyle = `rgba(95, 105, 118, ${0.2 + Math.random() * 0.3})`;
-        }
-        ctx.beginPath();
-        ctx.arc(x, y, r, 0, Math.PI * 2);
-        ctx.fill();
-    }
-
-    // 3) Sedimentary banding — subtle horizontal color shifts that suggest
-    // layered rock. Drawn as semi-transparent horizontal stripes with
-    // irregular wavy edges so they don't look mechanical.
-    for (let band = 0; band < 8; band++) {
-        const y = (band / 8) * size + (Math.random() - 0.5) * 30;
-        const h = 15 + Math.random() * 35;
-        const dark = Math.random() > 0.5;
-        ctx.fillStyle = dark
-            ? `rgba(45, 55, 65, ${0.10 + Math.random() * 0.10})`
-            : `rgba(150, 160, 172, ${0.06 + Math.random() * 0.08})`;
-        ctx.beginPath();
-        ctx.moveTo(0, y);
-        // Wavy top edge
-        for (let x = 0; x <= size; x += 16) {
-            ctx.lineTo(x, y + Math.sin(x * 0.05 + band) * 4 + (Math.random() - 0.5) * 3);
-        }
-        ctx.lineTo(size, y + h);
-        for (let x = size; x >= 0; x -= 16) {
-            ctx.lineTo(x, y + h + Math.sin(x * 0.05 + band + 1) * 4 + (Math.random() - 0.5) * 3);
-        }
-        ctx.closePath();
-        ctx.fill();
-    }
-
-    // 4) Mineral pockets — larger blobs where the stone has a different
-    // composition (think quartz veins or iron deposits). Drawn with soft
-    // radial gradients and tile-safe so they wrap across edges.
-    for (let i = 0; i < 18; i++) {
-        const cx = Math.random() * size;
-        const cy = Math.random() * size;
-        const r = 12 + Math.random() * 28;
-        const light = Math.random() > 0.5;
-        tileSafeBlob((ox, oy) => {
-            const x = cx + ox, y = cy + oy;
-            const g = ctx.createRadialGradient(x, y, 0, x, y, r);
-            if (light) {
-                g.addColorStop(0, 'rgba(180, 188, 198, 0.35)');
-                g.addColorStop(1, 'rgba(180, 188, 198, 0)');
-            } else {
-                g.addColorStop(0, 'rgba(35, 42, 52, 0.40)');
-                g.addColorStop(1, 'rgba(35, 42, 52, 0)');
-            }
-            ctx.fillStyle = g;
-            ctx.beginPath();
-            ctx.arc(x, y, r, 0, Math.PI * 2);
-            ctx.fill();
-        });
-    }
-
-    // 5) Crack network — branching jagged lines that look like real stone
-    // fractures. Tile-safe by wrapping any crack that exits one edge to
-    // enter from the opposite edge.
-    function drawCrack(startX, startY, dirX, dirY, length, depth) {
-        ctx.strokeStyle = `rgba(20, 25, 32, ${0.35 + depth * 0.15})`;
-        ctx.lineWidth = 0.8 + depth * 0.6;
-        ctx.beginPath();
-        let x = startX, y = startY;
-        ctx.moveTo(x, y);
-        const segments = Math.floor(length / 6);
-        for (let s = 0; s < segments; s++) {
-            // Step forward with random jitter, occasionally branching
-            x += dirX * 6 + (Math.random() - 0.5) * 4;
-            y += dirY * 6 + (Math.random() - 0.5) * 4;
-            // Wrap so the crack tiles seamlessly
-            x = ((x % size) + size) % size;
-            y = ((y % size) + size) % size;
-            ctx.lineTo(x, y);
-            // Occasional branch
-            if (depth < 2 && Math.random() < 0.12) {
-                const branchAngle = Math.atan2(dirY, dirX) + (Math.random() - 0.5) * 1.5;
-                drawCrack(x, y, Math.cos(branchAngle), Math.sin(branchAngle), length * 0.5, depth + 1);
-            }
-        }
-        ctx.stroke();
-    }
-
-    for (let i = 0; i < 10; i++) {
-        const angle = Math.random() * Math.PI * 2;
-        drawCrack(
-            Math.random() * size,
-            Math.random() * size,
-            Math.cos(angle), Math.sin(angle),
-            80 + Math.random() * 120,
-            0
-        );
-    }
-
-    // 6) Subtle border for edge definition (very dim so the surface
-    // doesn't pop visually against the grass).
-    ctx.strokeStyle = 'rgba(20, 28, 38, 0.18)';
-    ctx.lineWidth = 1;
-    ctx.strokeRect(0, 0, size, size);
-
-    const tex = new THREE.CanvasTexture(c);
-    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-    return tex;
-}
-
-// =====================================================================
-// TEXTURE SETUP
-// Ground: loaded from CDN (three.js r160 grasslight-big.jpg — a real
-// seamless photo-based grass texture). Procedural canvas grass with the
-// altitude grid is used as instant fallback while the CDN loads.
-// Obstacles: procedural canvas STONE texture (no CDN — every rock/stone
-// asset I tried on the three.js CDN 404s, and the moon texture doesn't
-// tile). The procedural stone is built in layers: granular base →
-// sedimentary banding → mineral pockets → branching crack network, with
-// tile-safe wrapping so it tiles seamlessly. Dim color tint applied
-// later keeps the surface muted so red cubes pop.
-// =====================================================================
-
-// --- Helper: configure a texture for perfect seamless tiling ---
-// NOTE: Three.js r128 is in use here, so we use the old color-encoding
-// API (tex.encoding = THREE.sRGBEncoding) instead of the new r152+
-// colorSpace API. Behavior is equivalent for color (albedo) textures.
-function configureTiledTexture(tex, repeatX, repeatY, aniso = 8) {
-    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-    tex.repeat.set(repeatX, repeatY);
-    tex.anisotropy = aniso;
-    tex.generateMipmaps = true;
-    tex.minFilter = THREE.LinearMipmapLinearFilter; // trilinear filtering = smooth at distance
-    tex.magFilter = THREE.LinearFilter;
-    if ('encoding' in tex) tex.encoding = THREE.sRGBEncoding; // r128 API
-    tex.needsUpdate = true;
-    return tex;
-}
-
-// Procedural textures used immediately + as fallback if CDN grass fails.
-const grassTex = makeGrassTexture();
-const stoneTex = makeStoneTexture();
-// `realRockTex` is null because we use the procedural stone for obstacles.
-// Kept as a let so makeBox's source-texture lookup stays consistent.
-let realRockTex = null;
-
-// --- Realistic seamless grass texture (CC0, from three.js examples) ---
-// grasslight-big.jpg is a real photo-based seamless grass texture.
-const grassCDN = new THREE.TextureLoader();
-grassCDN.setCrossOrigin('anonymous');
-grassCDN.load(
-    'https://cdn.jsdelivr.net/gh/mrdoob/three.js@r160/examples/textures/terrain/grasslight-big.jpg',
-    (tex) => {
-        // 2000-unit map / 16-unit tile = 125 repeats across
-        configureTiledTexture(tex, TUNING.grassTileRepeat, TUNING.grassTileRepeat, 8);
-        groundMat.map = tex;
-        groundMat.color.setHex(TUNING.groundTint); // keep the dim olive tint
-        groundMat.needsUpdate = true;
-        grassTex.dispose();
-    },
-    undefined,
-    () => console.warn('Grass CDN load failed — using procedural fallback.')
-);
-
-// Ground material: dark greenish-brown tint multiplies the grass texture so
-// it recedes into the background instead of competing with cubes/obstacles.
-const groundMat = new THREE.MeshLambertMaterial({ map: grassTex, color: TUNING.groundTint });
-const ground = new THREE.Mesh(new THREE.PlaneGeometry(MAP_SIZE, MAP_SIZE), groundMat);
+const groundMat = new THREE.MeshLambertMaterial({ map: grassTex, color: 0x77cc77 }); // Lightened ground tint
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(MAP_SIZE, MAP_SIZE), groundMat); //
 ground.rotation.x = -Math.PI/2;
 ground.matrixAutoUpdate = false;
 ground.updateMatrix();
@@ -1074,34 +586,7 @@ scene.add(ground);
 
 function makeBox(w, h, d, x, y, z, color=0x7a96b0, name='') {
     const geo = new THREE.BoxGeometry(w, h, d);
-    // Per-mesh tiling: scale the texture so each face shows it at roughly
-    // the same world-space density (1 tile per ~tileWorldSize units). For
-    // a BoxGeometry, UVs are 0..1 per face, so repeat = face_size_in_units / tile_size.
-    const tileWorldSize = TUNING.obstacleTileWorldSize;
-    const repX = Math.max(1, Math.round(w / tileWorldSize));
-    const repY = Math.max(1, Math.round(h / tileWorldSize));
-    const repZ = Math.max(1, Math.round(d / tileWorldSize));
-    // Box faces: +X/-X use (d, h); +Y/-Y use (w, d); +Z/-Z use (w, h).
-    // We pick the largest repeat as a compromise — proper per-face UV would
-    // require custom geometry, but this looks fine for boxes.
-    const rep = Math.max(repX, repY, repZ);
-    // Clone the source texture so each box can have its own repeat.
-    // Use the CDN rock texture if loaded, else fall back to procedural stone.
-    const srcTex = realRockTex || stoneTex;
-    const texClone = srcTex.clone();
-    texClone.wrapS = texClone.wrapT = THREE.RepeatWrapping;
-    texClone.repeat.set(rep, rep);
-    texClone.generateMipmaps = true;
-    texClone.minFilter = THREE.LinearMipmapLinearFilter;
-    texClone.magFilter = THREE.LinearFilter;
-    if ('encoding' in texClone) texClone.encoding = THREE.sRGBEncoding; // r128 API
-    texClone.anisotropy = TUNING.obstacleTextureAniso;
-    texClone.needsUpdate = true;
-    // --- TINT: dim the texture so it doesn't compete with red cubes ---
-    // Multiply the stone texture by a dark muted grey-blue. The texture
-    // detail is still visible but the surface recedes into the background.
-    const dimColor = TUNING.obstacleTint;
-    const mat = new THREE.MeshPhongMaterial({ map: texClone, color: dimColor, emissive: 0x000000 });
+    const mat = new THREE.MeshPhongMaterial({ map: stoneTex, color, emissive: 0x000000 });
     const mesh = new THREE.Mesh(geo, mat);
     mesh.position.set(x, y + h/2, z);
     mesh.matrixAutoUpdate = false;
@@ -1112,7 +597,7 @@ function makeBox(w, h, d, x, y, z, color=0x7a96b0, name='') {
     return mesh;
 }
 
-makeBox(TUNING.startPlatformSize, TUNING.startPlatformHeight, TUNING.startPlatformSize, 0, 0, 0, TUNING.startPlatformColor); // Start platform
+makeBox(20, 1, 20, 0, 0, 0, 0x888888); // Start platform lightened
 
 // Randomize platform positions on each game load
 function randomizePlatformPositions(platforms) {
@@ -1126,7 +611,6 @@ function randomizePlatformPositions(platforms) {
 }
 
 // Define core obstacle patterns (simplified, reusable layouts)
-// Format: [w, h, d, x, y, z, color, name?]
 const OBSTACLE_PATTERNS = [
     // ninja parckore
     [[9, 20, 2, 0, -1, -4, 0xcccccc], [9, 20, 2, 0, -1, 7, 0xcccccc], [3, 1, 4, 3, 13, 4, 0xcccccc], [3, 1, 4, -3, 5, -1, 0xcccccc]],
@@ -1146,37 +630,11 @@ const OBSTACLE_PATTERNS = [
     [[12, 1, 12, 0, 0, 0, 0x808080]]
 ];
 
-// --- SCALE ALL OBSTACLES BY TUNING.obstacleSizeMult ---
-// Multiplies width/height/depth AND x/y/z positions by obstacleSizeMult
-// so obstacles are visibly bigger while preserving the relative spacing
-// between pieces within a pattern. Without scaling positions, pieces that
-// were 9 units apart edge-to-edge become only 8 units apart with thicker
-// boxes — and the altor pattern's central platform ends up sitting right
-// on top of its four pillars instead of floating above them.
-// y is also clamped to >= 0 after scaling so nothing clips below the
-// floor plane (the ninja-parckore walls originally y=-1 seat into ground;
-// 1.5x scaling puts them at y=-1.5 which we lift to 0).
-const OBSTACLE_SIZE_MULT = TUNING.obstacleSizeMult;
-OBSTACLE_PATTERNS.forEach(pattern => {
-    pattern.forEach(p => {
-        p[0] *= OBSTACLE_SIZE_MULT; // w
-        p[1] *= OBSTACLE_SIZE_MULT; // h
-        p[2] *= OBSTACLE_SIZE_MULT; // d
-        p[3] *= OBSTACLE_SIZE_MULT; // x: spread pieces apart proportionally
-        p[4] = Math.max(0, p[4] * OBSTACLE_SIZE_MULT); // y: scale + clamp to floor
-        p[5] *= OBSTACLE_SIZE_MULT; // z: spread pieces apart proportionally
-    });
-});
-
 // Randomly select patterns and spread them across the map
 function generateObstacles(patterns, count = 20) {
     const selectedPatterns = [];
     const spacing = MAP_SIZE * 0.42; // Spread patterns across the new map scale
-    // Min distance between pattern centers — scaled up by OBSTACLE_SIZE_MULT
-    // since each pattern is now 1.5x bigger in every dimension. Without this,
-    // two patterns placed 200 units apart could overlap because each pattern's
-    // outermost piece is now 1.5x further from its own center.
-    const minDistBetweenPatterns = TUNING.obstacleMinDistBetween * OBSTACLE_SIZE_MULT;
+    const minDistBetweenPatterns = 200; // ensure structures aren't on top of each other
     const patternCenters = [];
     
     for (let i = 0; i < count; i++) {
@@ -1241,7 +699,7 @@ const platformData = randomizedPlatformData;
 platformData.forEach(p => makeBox(...p));
 
 // precompute static obstacle boxes once
-const playerRadius = TUNING.playerRadius;
+const playerRadius = 0.4;
 function buildObstacleBoxes() {
     obstacleBoxes.length = 0;
     for (let i = 0; i < obstacles.length; i++) {
@@ -1468,7 +926,7 @@ function updateModeDiffUI() {
         : 'Collect all 20 red cubes';
     const modeNote = gameMode === 'timeattack' ? ' — fastest time wins' : (gameMode === 'survival' ? ' — they are awake from the start' : '');
     document.getElementById('binds-text').innerHTML =
-        `${formatBind(keyMapping.forward)}/${formatBind(keyMapping.left)}/${formatBind(keyMapping.backward)}/${formatBind(keyMapping.right)} — Move &nbsp;|&nbsp; ${formatBind(keyMapping.jump)} — Jump &nbsp;|&nbsp; ${formatBind(keyMapping.sprint)} — Sprint &nbsp;|&nbsp; Ctrl — Slide/Dive &nbsp;|&nbsp; ${formatBind(keyMapping.ability)} — Flare<br>${goalText}${modeNote}<br>Follow the golden beacons<br><br><span style="color:#888; font-size:10px;">slide-jump preserves momentum · air-strafe (A/D + mouse) to build speed · wall-jumps refresh in air</span><br><br><span style="color:#555; font-size:11px;">something is out there. don't worry about it.</span>`;
+        `${formatBind(keyMapping.forward)}/${formatBind(keyMapping.left)}/${formatBind(keyMapping.backward)}/${formatBind(keyMapping.right)} — Move &nbsp;|&nbsp; ${formatBind(keyMapping.jump)} — Jump &nbsp;|&nbsp; ${formatBind(keyMapping.sprint)} — Sprint &nbsp;|&nbsp; ${formatBind(keyMapping.ability)} — Flare<br>${goalText}${modeNote}<br>Follow the golden beacons<br><br><span style="color:#555; font-size:11px;">something is out there. don't worry about it.</span>`;
 }
 
 // ===================== LEADERBOARD =====================
@@ -1728,7 +1186,6 @@ let impactFrameHitstopUntil = 0; // real-world ms timestamp; read each frame in 
 // are killed — no per-object color hunting needed.
 let impactFlatModeActive = false;
 let _flatModeSnapshot = null;
-let _fovWasFrozen = false; // tracks whether camera.fov was frozen by an impact frame
 
 function setFlatImpactStyle(active) {
     if (active === impactFlatModeActive) return;
@@ -1843,7 +1300,7 @@ function showCurseMsg(text, dur=2800) {
     curseMsg.textContent = text;
     curseMsg.style.opacity = '1';
     curseMsg.style.fontSize = curseFactor > 0.7 ? (24 + Math.random()*20)+'px' : '26px';
-    trackTimeout(runScopedTimeout(() => { curseMsg.style.opacity = '0'; }, dur));
+    setTimeout(() => { curseMsg.style.opacity = '0'; }, dur);
 }
 
 function updateCurse() {
@@ -1862,46 +1319,31 @@ function updateCurse() {
     // active — it owns these properties for its short lifespan and restores
     // them itself; fighting it here would un-flatten the hit mid-flash.
     if (!impactFlatModeActive) {
-    // Sky color lerps from skyColorStart (bright blue) → skyColorEnd (dark red)
-    // based on curseFactor. Brightness mult lightens both endpoints.
-    const skyStartR = ((TUNING.skyColorStart >> 16) & 0xff) / 255;
-    const skyStartG = ((TUNING.skyColorStart >> 8) & 0xff) / 255;
-    const skyStartB = (TUNING.skyColorStart & 0xff) / 255;
-    const skyEndR = ((TUNING.skyColorEnd >> 16) & 0xff) / 255;
-    const skyEndG = ((TUNING.skyColorEnd >> 8) & 0xff) / 255;
-    const skyEndB = (TUNING.skyColorEnd & 0xff) / 255;
-    const skyR = Math.min(1, THREE.MathUtils.lerp(skyStartR, skyEndR, curseFactor) * TUNING.brightnessMult);
-    const skyG = Math.min(1, THREE.MathUtils.lerp(skyStartG, skyEndG, curseFactor) * TUNING.brightnessMult);
-    const skyB = Math.min(1, THREE.MathUtils.lerp(skyStartB, skyEndB, curseFactor) * TUNING.brightnessMult);
-    scene.background.setRGB(skyR, skyG, skyB);
-    const baseFogDensity = gameMode === 'survival' ? 0.0235 : TUNING.fogDensityBase;
-    scene.fog.color.setRGB(skyR, skyG, skyB);
-    scene.fog.density = (curseFactor <= 0.15) ? TUNING.fogDensityStart : baseFogDensity + curseFactor * TUNING.fogDensityPerCurse;
+    const skyR = Math.floor(THREE.MathUtils.lerp(0x87, 0x44, curseFactor)); 
+    const skyG = Math.floor(THREE.MathUtils.lerp(0xce, 0x00, curseFactor));
+    const skyB = Math.floor(THREE.MathUtils.lerp(0xeb, 0x00, curseFactor));
+    // avoid creating new Color instances each frame
+    scene.background.setRGB(skyR/255, skyG/255, skyB/255);
+    const baseFogDensity = gameMode === 'survival' ? 0.0235 : 0.006; // Survival starts at 14-cube fog level
+    // Update fog color/density from curse factor for all modes (including survival)
+    scene.fog.color.setRGB(skyR/255, skyG/255, skyB/255);
+    scene.fog.density = (curseFactor <= 0.15) ? 0 : baseFogDensity + curseFactor * 0.025;
 
     const vigAlpha = curseFactor * 0.7;
     vignette.style.background = `radial-gradient(ellipse at center, transparent 40%, rgba(${Math.floor(180*curseFactor)},0,0,${vigAlpha}) 100%)`; // Increased red hue
 
-    // Ambient light: lerps from white → red as curse builds, with intensity
-    // ramping from ambientLightStart → ambientLightEnd. Brightness mult
-    // scales the intensity up so the whole scene gets brighter.
     ambientLight.color.setRGB(
-        THREE.MathUtils.lerp(1.0, 0.2, curseFactor),
+        THREE.MathUtils.lerp(1.0, 0.2, curseFactor), // Lower intensity
         THREE.MathUtils.lerp(1.0, 0.0, curseFactor),
         THREE.MathUtils.lerp(1.0, 0.0, curseFactor)
     );
-    ambientLight.intensity = THREE.MathUtils.lerp(TUNING.ambientLightStart, TUNING.ambientLightEnd, curseFactor) * TUNING.brightnessMult;
-    sunLight.intensity = THREE.MathUtils.lerp(TUNING.sunLightStart, TUNING.sunLightEnd, curseFactor) * TUNING.brightnessMult;
+    ambientLight.intensity = THREE.MathUtils.lerp(1.0, 0.25, curseFactor); 
+    sunLight.intensity = THREE.MathUtils.lerp(1.2, 0.1, curseFactor); 
 
-    // Ground material color: lerps from the configured groundTint (dim olive
-    // by default) → near-black as curse builds. Brightness mult scales up
-    // the color so the ground gets brighter overall.
-    const gtR = ((TUNING.groundTint >> 16) & 0xff) / 255;
-    const gtG = ((TUNING.groundTint >> 8) & 0xff) / 255;
-    const gtB = (TUNING.groundTint & 0xff) / 255;
-    const groundR = Math.min(1, THREE.MathUtils.lerp(gtR, 0.1, curseFactor) * TUNING.brightnessMult);
-    const groundG = Math.min(1, THREE.MathUtils.lerp(gtG, 0.0, curseFactor) * TUNING.brightnessMult);
-    const groundB = Math.min(1, THREE.MathUtils.lerp(gtB, 0.0, curseFactor) * TUNING.brightnessMult);
-    groundMat.color.setRGB(groundR, groundG, groundB);
+    const gR = Math.floor(THREE.MathUtils.lerp(0x77, 0x1a, curseFactor));
+    const gG = Math.floor(THREE.MathUtils.lerp(0xcc, 0x00, curseFactor));
+    const gB = Math.floor(THREE.MathUtils.lerp(0x77, 0x00, curseFactor));
+    groundMat.color.setRGB(gR/255, gG/255, gB/255);
     }
 
     if (audioCtx) {
@@ -2226,7 +1668,7 @@ loadKeybinds();
 updateModeDiffUI();
 
 const velocity = new THREE.Vector3();
-const playerHeight = TUNING.playerHeight;
+const playerHeight = 1.8;
 let currentPlayerHeight = playerHeight; // Dynamic player height for sliding
 let isGrounded = false;
 let currentSprintMultiplier = 1.0; // For maintaining air momentum
@@ -2245,88 +1687,36 @@ let slideTimer = 0;
 let slideCooldownTimer = 0;
 let cubeBoostTimer = 0;
 let slideDirection = new THREE.Vector3();
-const SLIDE_DURATION = TUNING.slideDuration;
-const SLIDE_INITIAL_SPEED = TUNING.slideInitialSpeed; // legacy alias used elsewhere in code
-const SLIDE_COOLDOWN = TUNING.slideCooldown;
+const SLIDE_DURATION = 1.2;
+const SLIDE_INITIAL_SPEED = 28.0; // Slightly reduced for better physics stability
+const SLIDE_COOLDOWN = 0.2; // Snappier slide recovery
 let isJumpscareActive = false;
 let isLocked = false;
 let isFlying = false;
 let debugStructureMarkers = [];
 
-// =====================================================================
-// TUNING — single source of truth for all movement & UI parameters
-// (defined at the very top of the script so every line below — including
-// makeBox, playerRadius, and the obstacle scaling loop that all run at
-// parse time — can safely reference TUNING.* without hitting the const
-// temporal-dead-zone error.)
-// =====================================================================
-const GRAVITY = TUNING.gravity;
-const WALL_GRAVITY = TUNING.wallGravity;
-const MOVE_SPEED = TUNING.moveSpeed;
-const SPRINT_MULT = TUNING.sprintMult;
-const JUMP_FORCE = TUNING.jumpForce;
-const WALL_JUMP_FORCE_UP = TUNING.wallJumpForceUp;
-const WALL_JUMP_FORCE_SIDE = TUNING.wallJumpForceSide;
-const GROUND_ACCEL = TUNING.groundAccel;
-const GROUND_FRICTION = TUNING.groundFriction;
-const AIR_ACCEL = TUNING.airAccel;
-const AIR_SPEED_CAP = TUNING.airSpeedCap;
-const AIR_SPEED_LIMIT = TUNING.airSpeedLimit;
-const SLIDE_FRICTION = TUNING.slideFriction;
-const SLIDE_INITIAL_SPEED_OVERRIDE = TUNING.slideInitialSpeed;
-const SLIDE_MAX_SPEED = TUNING.slideMaxSpeed;
-const SLIDE_BOOST_FROM_SPEED_MULT = TUNING.slideBoostFromSpeedMult;
-const COYOTE_TIME = TUNING.coyoteTime;
-const JUMP_BUFFER_TIME = TUNING.jumpBufferTime;
+const GRAVITY = 28.0;
+const WALL_GRAVITY = 5.0;
+const MOVE_SPEED = 13.0;
+const JUMP_FORCE = 13.5;
+const WALL_JUMP_FORCE_UP = 9.5; //
+const WALL_JUMP_FORCE_SIDE = 10.5;
+
+// --- Jump feel: coyote time + input buffering ---
+// Coyote time: a short grace window after walking off a ledge where a jump
+// still counts as a "grounded" jump. Jump buffer: pressing jump slightly
+// before landing still fires the jump the instant you touch down, instead
+// of being eaten. Both are tiny windows but they're the difference between
+// movement feeling responsive vs. feeling like it's fighting you.
+const COYOTE_TIME = 0.1;
+const JUMP_BUFFER_TIME = 0.12;
 let coyoteTimer = 0;
 let jumpBufferTimer = 0;
-
-// Tracks the horizontal speed at the moment of a slide-jump so we can
-// preserve it through the launch (slam-storage style). Without this, the
-// slide-jump would clip the player back to MOVE_SPEED on landing.
-let preservedSlideSpeed = 0;
 
 const keys = { w:false, a:false, s:false, d:false, space:false, shift:false, control:false };
 const instructions = document.getElementById('instructions');
 const pauseMenu = document.getElementById('pause-menu');
 let gameStarted = false, gameEnded = false;
-
-// --- Run-ID + pending-timer tracking (fixes quickRestart freezes) ---
-// quickRestart needs to invalidate any pending setTimeout callbacks so
-// they can't fire after the restart and corrupt the new run's state.
-// The most common culprits:
-//   - setTimeout(() => endGame('win'), 1500)     → fires endGame, sets gameEnded=true, FREEZES the new run
-//   - setTimeout(() => endGame('caught'), 1500)  → same, from monster jumpscare
-//   - setTimeout(() => updateCurse(), 360)       → may re-apply stale curse state
-//   - setTimeout(() => {machText filter reset})  → cosmetic, harmless
-//
-// We track a `currentRunId` that increments on every quickRestart. Pending
-// callbacks capture the run ID at scheduling time and check it before
-// running — if the ID has changed, the callback is a stale leftover and
-// is silently dropped.
-let currentRunId = 0;
-// Timestamp (performance.now()) of the last quickRestart. The pointerlockchange
-// handler uses this to suppress the brief unlock-during-relock flicker for a
-// short window (300ms) after a restart. After 300ms, normal pause/resume
-// behavior is restored so ESC still works.
-let _lastRestartTime = 0;
-const RESTART_SUPPRESS_WINDOW_MS = 300;
-// Wrap setTimeout so callbacks auto-skip if the run ID has changed.
-function runScopedTimeout(fn, delay) {
-    const scheduledRunId = currentRunId;
-    return setTimeout(() => {
-        if (scheduledRunId !== currentRunId) return; // stale — drop
-        try { fn(); } catch (e) { /* ignore */ }
-    }, delay);
-}
-// Force-clear any raw setTimeout handles we know about. Used by quickRestart
-// as a belt-and-suspenders on top of the run-ID check.
-let _pendingTimeouts = [];
-function trackTimeout(handle) { _pendingTimeouts.push(handle); return handle; }
-function clearTrackedTimeouts() {
-    _pendingTimeouts.forEach(h => clearTimeout(h));
-    _pendingTimeouts = [];
-}
 
 async function startLoadingSequence() {
     runTainted = false;
@@ -2398,54 +1788,12 @@ function resumeGame() {
 }
 
 function quickRestart() {
-    // Save current settings — these are the ONLY things preserved across
-    // a quick restart. Everything else (player state, curse, fog, music,
-    // impact frames, pending timers, etc.) is reset to a fresh-run state.
+    // Save current settings
     const currentMode = gameMode;
     const currentDiff = difficulty;
-
-    // --- CRITICAL: invalidate all pending run-scoped timers FIRST ---
-    // This drops any stale setTimeout callbacks (endGame, jumpscare
-    // recovery, beat-drop updateCurse, curse messages, mach flash, etc.)
-    // that were scheduled by the previous run. Without this, a stale
-    // endGame timer firing 1.5s after a restart would set gameEnded=true
-    // and freeze the new run.
-    currentRunId++;
-    clearTrackedTimeouts();
-
-    // --- CRITICAL: clear impact-frame state ---
-    // If quickRestart is called during an impact frame (e.g. player collects
-    // a cube then immediately presses R / clicks quick restart), the
-    // impactFlatModeActive flag stays true and _flatModeSnapshot stays
-    // non-null. The FOV lerp, camera bob, and wall-run tilt are all gated
-    // on !impactFlatModeActive, so the game appears frozen even though
-    // the animate loop is still running. Force-clearing these unfreezes
-    // the camera systems immediately.
-    if (impactFlatModeActive) {
-        // Restore the snapshot if it exists so scene/material state isn't
-        // left in the flat-mode configuration (white background, lights off).
-        try { setFlatImpactStyle(false); } catch (e) { /* ignore */ }
-    }
-    impactFlatModeActive = false;
-    _flatModeSnapshot = null;
-    _fovWasFrozen = false;
-    impactFrameHitstopUntil = 0;
-    if (impactFrameEl) {
-        impactFrameEl.classList.remove('firing');
-        clearTimeout(impactFrameEl._hideTimer);
-    }
-    if (window._impactFlatTimer) {
-        clearTimeout(window._impactFlatTimer);
-        window._impactFlatTimer = null;
-    }
-    // Clear any pending impact-shake on the canvas
-    if (renderer && renderer.domElement) {
-        renderer.domElement.classList.remove('impact-shake');
-        clearTimeout(renderer.domElement._shakeTimer);
-    }
-
+    
     // Reset player position and state
-    player.position.set(0, TUNING.spawnY, 0); // On top of 1.5-tall start platform (eye = 1.5+1.8+0.5)
+    player.position.set(0, playerHeight, 0);
     velocity.set(0, 0, 0);
     isSliding = false;
     slideCooldownTimer = 0;
@@ -2455,7 +1803,7 @@ function quickRestart() {
     camera.rotation.set(0, 0, 0);
     player.rotation.y = 0;
     camera.position.set(0, 0, 0);
-
+    
     // Reset player state
     isGrounded = true;
     wasGroundedLastFrame = true;
@@ -2467,29 +1815,14 @@ function quickRestart() {
     currentPlayerHeight = playerHeight;
     currentSprintMultiplier = 1.0;
     isFlying = false;
-    preservedSlideSpeed = 0;
-
+    
     // Reset game progress
     cubesCollected = 0;
-    curseFactor = 0; // reset to 0 here; updateCurse() below will set the
-                     // correct starting curse for the mode (0 for non-survival,
-                     // 0.7 for survival) and apply the matching fog.
+    curseFactor = gameMode === 'survival' ? 0.7 : 0; // Start at high curse in survival
     gameTime = 0;
     gameEnded = false;
     isJumpscareActive = false;
-
-    // Reset music / beat-drop timers (prevents immediate re-trigger of
-    // the beat-drop impact frame that would re-freeze the camera).
-    beatDropTriggered = false;
-    musicStartTime = 0;
-    if (monsterMusicSource) {
-        try { monsterMusicSource.stop(); } catch (e) { /* already stopped */ }
-        monsterMusicSource = null;
-    }
-
-    // Reset audio distortion (cleared when curseFactor goes back to 0)
-    if (distortionNode) distortionNode.curve = makeDistortionCurve(0);
-
+    
     // Reset cubes and beacons
     cubes.forEach(cube => {
         cube.userData.collected = false;
@@ -2497,7 +1830,7 @@ function quickRestart() {
         cube.visible = true;
     });
     beacons.forEach(beacon => beacon.visible = true);
-
+    
     // Reset monsters
     monsters.forEach(m => {
         const ang = Math.random() * Math.PI * 2;
@@ -2505,10 +1838,10 @@ function quickRestart() {
         m.visible = false;
         m.userData.stunTimer = 0;
     });
-
+    
     // Reset ability
     abilityCooldownTimer = 0;
-
+    
     // Reset keys
     keys.w = false;
     keys.a = false;
@@ -2517,96 +1850,32 @@ function quickRestart() {
     keys.space = false;
     keys.shift = false;
     keys.control = false;
-
-    // Restore settings (these are the only things preserved)
+    
+    // Restore settings
     gameMode = currentMode;
     difficulty = currentDiff;
     recomputeMonsterThreshold();
-
-    // Reset curse effects — this re-applies the correct starting curse for
-    // the current mode (0 for non-survival, 0.7 for survival) and the
-    // matching fog/sky/lighting. After this call, the visual state matches
-    // a fresh run of the selected mode.
+    
+    // Reset curse effects
     updateCurse();
-
-    // --- EXPLICIT FOG RESET ---
-    // updateCurse() above sets the correct fog density for the starting
-    // curse level, but in survival mode the previous run may have left
-    // fog density very high (end-game curse ~1.0). We force-set it here
-    // to be absolutely sure the player sees a clean starting state.
-    // Survival uses a higher base fog density than other modes (0.0235 vs
-    // TUNING.fogDensityBase) — see updateCurse() for the matching logic.
-    if (gameMode === 'survival') {
-        // Survival: curse starts at 0.7, fog = 0.0235 + 0.7 * 0.025 = 0.041
-        const survivalFogBase = 0.0235;
-        scene.fog.density = survivalFogBase + 0.7 * TUNING.fogDensityPerCurse;
-    } else {
-        // Non-survival: curse starts at 0, no fog
-        scene.fog.density = TUNING.fogDensityStart;
-    }
-    scene.fog.color.copy(scene.background);
-
+    
     // Hide menus and request pointer lock
     pauseMenu.style.display = 'none';
     winScreen.style.display = 'none';
-    instructions.style.display = 'none';
-
-    // --- FORCE isLocked = true + set restart timestamp ---
-    // The animate loop early-returns when !isLocked, which means game
-    // logic doesn't run. After requestPointerLock() there's a brief
-    // async window where isLocked is still false. If the browser is slow
-    // to engage pointer lock (or denies it), the game appears frozen.
-    // Setting isLocked = true here lets the animate loop run immediately.
-    //
-    // _lastRestartTime is checked by the pointerlockchange handler to
-    // suppress the brief unlock-during-relock flicker (some browsers fire
-    // locked=false then locked=true when re-locking). The suppression only
-    // lasts RESTART_SUPPRESS_WINDOW_MS (300ms) — after that, normal ESC
-    // behavior is restored so the player can pause normally.
-    isLocked = true;
-    _lastRestartTime = performance.now();
-
-    // Force pointer lock. Wrap in try/catch — some browsers throw if
-    // called without a user gesture (shouldn't happen since the user
-    // clicked the button, but defensive).
-    try { document.body.requestPointerLock(); } catch (e) { /* may throw if not user-activated */ }
-
-    // Small delay to ensure pointer lock engages — if it didn't, retry.
-    // Also re-assert isLocked = true in case the pointerlockchange
-    // handler flipped it to false during the transition.
-    trackTimeout(setTimeout(() => {
+    
+    // Force pointer lock
+    document.body.requestPointerLock();
+    
+    // Small delay to ensure pointer lock engages
+    setTimeout(() => {
         if (!document.pointerLockElement) {
-            try { document.body.requestPointerLock(); } catch (e) { /* ignore */ }
+            document.body.requestPointerLock();
         }
-        // If pointer lock still didn't engage after retry, force isLocked
-        // true anyway so the player can keep playing — better a slightly
-        // janky pointer than a frozen screen.
-        if (!document.pointerLockElement) {
-            isLocked = true;
-        }
-    }, 50));
+    }, 50);
 }
 
 document.addEventListener('pointerlockchange', () => {
-    const newLocked = document.pointerLockElement === document.body;
-    // --- Suppress pause-menu flicker for a short window after quick-restart ---
-    // When quickRestart calls requestPointerLock(), some browsers fire:
-    //   pointerlockchange (locked = false)  ← brief transition
-    //   pointerlockchange (locked = true)   ← final state
-    // The first event would re-show the pause menu and suspend audio,
-    // creating a visible flicker + audio dropout. We suppress unlock
-    // events for RESTART_SUPPRESS_WINDOW_MS (300ms) after a restart —
-    // long enough to skip the flicker, short enough that a real ESC
-    // press 1+ second later still works normally.
-    const sinceRestart = performance.now() - _lastRestartTime;
-    const inRestartWindow = sinceRestart < RESTART_SUPPRESS_WINDOW_MS;
-    if (inRestartWindow && !newLocked) {
-        // Brief unlock during re-lock transition — ignore, wait for re-lock.
-        // Do NOT update isLocked here — keep it true so the animate loop
-        // keeps running the game.
-        return;
-    }
-    isLocked = newLocked;
+    isLocked = document.pointerLockElement === document.body;
     if (!isJumpscareActive && !gameEnded) {
         if (isLocked) {
             instructions.style.display = 'none';
@@ -2644,20 +1913,7 @@ function closeSettings() {
 
 document.addEventListener('mousemove', e => {
     if (!isLocked || isJumpscareActive) return;
-    let sens = (TUNING.baseMouseSens * mouseSensitivity) + curseFactor * TUNING.curseMouseSensAdd;
-    // --- SPEED-AWARE LOOK SENSITIVITY ---
-    // The feel problem: at high horizontal speed, the same mouse movement
-    // barely rotates your view relative to how fast the world is flying
-    // past, so turning feels sluggish and you can't redirect in time.
-    // Fix: scale look sensitivity with horizontal speed so the player
-    // always has roughly the same "degrees of view per unit of ground
-    // covered" feeling. At hSpeed=0 → 1.0x; at hSpeed=35 (~Mach 1) → 1.7x;
-    // at hSpeed=70+ (Mach 4) → 1.0+speedLookMultMax. This is what lets
-    // you actually navigate obstacles while sprinting without cranking
-    // your base sensitivity through the roof.
-    const hSpeedNow = Math.hypot(velocity.x, velocity.z);
-    const speedLookMult = 1.0 + Math.min(hSpeedNow / TUNING.speedLookMultDivisor, TUNING.speedLookMultMax);
-    sens *= speedLookMult;
+    const sens = (0.002 * mouseSensitivity) + curseFactor * 0.0008;
     yaw -= e.movementX * sens;
     pitch -= e.movementY * (sens + (curseFactor > 0.7 ? Math.sin(gameTime*3)*0.002 : 0));
     pitch = Math.max(-Math.PI/2.2, Math.min(Math.PI/2.2, pitch));
@@ -2960,10 +2216,8 @@ let lastUIContent = "";
 // Max distance the player is allowed to move per collision substep.
 // Anything faster than this in one frame gets split into multiple
 // smaller steps so thin walls/platforms can't be skipped over.
-// Bumped MAX_SUBSTEPS from 8 to 12 to handle the new 80 u/s slide cap
-// without tunneling through obstacle faces.
-const MAX_SUBSTEP_DIST = TUNING.maxSubstepDist;
-const MAX_SUBSTEPS = TUNING.maxSubsteps;
+const MAX_SUBSTEP_DIST = 0.4;
+const MAX_SUBSTEPS = 8;
 
 function getHorizontalSpeed() {
     return Math.hypot(velocity.x, velocity.z);
@@ -2975,30 +2229,22 @@ function applyGravityAndFlight(dt) {
     if (isSliding) targetPlayerEyeHeight = playerHeight * 0.5;
     currentPlayerHeight = THREE.MathUtils.lerp(currentPlayerHeight, targetPlayerEyeHeight, dt * 25);
 
-    // Sprint multiplier ramps to SPRINT_MULT when shift held; resets on ground when not.
-    // We use SPRINT_MULT (1.55) as the target, not the old 1.95, because the new
-    // MOVE_SPEED is already fast — sprint is a moderate bump, not a 2x blowout.
+    // Update sprint multiplier (air momentum retention)
     if (keys.shift) {
-        currentSprintMultiplier = THREE.MathUtils.lerp(currentSprintMultiplier, SPRINT_MULT, dt * TUNING.sprintRampRate);
+        currentSprintMultiplier = THREE.MathUtils.lerp(currentSprintMultiplier, 1.95, dt * 14);
     } else if (isGrounded) {
-        currentSprintMultiplier = THREE.MathUtils.lerp(currentSprintMultiplier, 1.0, dt * TUNING.sprintDecayRate);
+        currentSprintMultiplier = THREE.MathUtils.lerp(currentSprintMultiplier, 1.0, dt * 10);
     }
 
     if (isFlying) {
         // flying mode: no gravity, free movement
         velocity.y = 0;
     } else if (isWallRunning) {
-        // Wall runs hang — gravity is light, and we boost upward slightly so
-        // you don't immediately slide down. Preserves the Ultrakill "stick
-        // to the wall" feel.
         velocity.y -= WALL_GRAVITY * dt;
-        if (velocity.y < TUNING.wallRunMaxFallSpeed) velocity.y = TUNING.wallRunMaxFallSpeed;
+        if (velocity.y < -1.5) velocity.y = -1.5;
     } else if (!isGrounded) {
         let gravityMult = 1.0;
-        if (isSliding && isDive) gravityMult = TUNING.diveGravityMult; // Dives slam down harder (Grace slam)
-        // Variable jump height: if the player releases jump early while rising,
-        // cut upward velocity. Lets you do tiny hops vs. full jumps by tap-vs-hold.
-        if (velocity.y > TUNING.variableJumpCutoffVel && !keys.space) gravityMult *= TUNING.variableJumpGravityMult;
+        if (isSliding && isDive) gravityMult = 1.75; // Only dives get heavy sliding gravity
         velocity.y -= GRAVITY * gravityMult * dt;
     }
 }
@@ -3009,49 +2255,12 @@ function getInputDirection() {
     if (keys.s) tmpInput.z += 1;
     if (keys.a) tmpInput.x -= 1;
     if (keys.d) tmpInput.x += 1;
-    // NOTE: we do NOT normalize here for air strafing — Quake-style accel
-    // is sensitive to wishspeed, and we want a non-normalized wishDir for
-    // diagonal inputs to behave naturally. We normalize when needed inside
-    // the accelerate() path.
+    tmpInput.normalize();
     tmpMove.copy(tmpInput).applyAxisAngle(Y_AXIS, yaw);
     return tmpInput;
 }
 
-// --- Quake/Source-style acceleration core ---
-// This is THE function that gives the movement its feel. Wishspeed is the
-// max speed we'd LIKE to reach in wishDir. CurrentSpeed is the component
-// of velocity already pointing along wishDir. We can only add up to
-// (wishSpeed - currentSpeed), and accel*dt*wishSpeed is the most we add
-// per frame. The asymmetry between ground (high wishspeed) and air
-// (capped wishspeed) is what makes strafe-jumping work.
-function accelerate(wishDirX, wishDirZ, wishSpeed, accel, dt) {
-    // Project current velocity onto wishDir
-    const currentSpeed = velocity.x * wishDirX + velocity.z * wishDirZ;
-    const addSpeed = wishSpeed - currentSpeed;
-    if (addSpeed <= 0) return; // already moving at/above wishSpeed in this dir
-    let accelSpeed = accel * dt * wishSpeed;
-    if (accelSpeed > addSpeed) accelSpeed = addSpeed;
-    velocity.x += accelSpeed * wishDirX;
-    velocity.z += accelSpeed * wishDirZ;
-}
-
-// Ground friction — Quake-style exponential decay. The lower the friction
-// constant, the longer your speed carries when you stop pressing inputs.
-// Crucially this only applies on the ground when no input is held; with
-// input, accelerate() takes over and lets you re-steer without losing
-// much speed (because GROUND_ACCEL is high enough to push you back up to
-// wishspeed before friction eats much).
-function applyGroundFriction(dt) {
-    const speed = Math.hypot(velocity.x, velocity.z);
-    if (speed < 0.1) { velocity.x = 0; velocity.z = 0; return; }
-    const drop = speed * GROUND_FRICTION * dt;
-    const newSpeed = Math.max(0, speed - drop);
-    const scale = newSpeed / speed;
-    velocity.x *= scale;
-    velocity.z *= scale;
-}
-
-// --- SLIDING & MOVEMENT PHYSICS (Ultrakill / Grace style) ---
+// --- SLIDING & MOVEMENT PHYSICS (Grace-inspired) ---
 function updateSlideState(dt, hSpeed) {
     // Start a new slide. Cooldown is honored even mid-air now — it used to be
     // bypassed whenever airborne (to allow diving shortly after a normal jump,
@@ -3061,74 +2270,44 @@ function updateSlideState(dt, hSpeed) {
     // between, so holding forward+jump+slide+sprint together stacked velocity
     // every frame and the player never came back down. Real air-dives after a
     // plain jump are unaffected since the cooldown is already 0 in that case.
-    if (keys.control && !isSliding && slideCooldownTimer <= 0 && hSpeed > 4.0) {
+    if (keys.control && !isSliding && slideCooldownTimer <= 0 && hSpeed > 5.0) {
         isSliding = true;
         slideTimer = SLIDE_DURATION;
         isDive = !isGrounded;
         isSlideJump = false;
 
         if (!isGrounded) {
-            // Mid-air Slide (Dive / Grace slam): Direction based on where looking
+            // Mid-air Slide (Dive): Direction based on where looking
             slideDirection.set(0, 0, -1).applyAxisAngle(Y_AXIS, yaw).normalize();
-            if (cubeBoostTimer <= 0) velocity.y = TUNING.diveSlamSpeed; // Harder slam
+            if (cubeBoostTimer <= 0) velocity.y = -22.0; // Skip the downward slam if we have a parry boost
         } else {
-            // Ground Slide: Direction based on current movement (or facing if stationary)
-            if (hSpeed > 1.0) {
-                slideDirection.set(velocity.x, 0, velocity.z).normalize();
-            } else {
-                slideDirection.set(0, 0, -1).applyAxisAngle(Y_AXIS, yaw).normalize();
-            }
+            // Ground Slide: Direction based on current movement
+            slideDirection.set(velocity.x, 0, velocity.z).normalize();
         }
 
-        // Massive initial speed kick — scales hard with current speed so
-        // chaining slide-jump-slide keeps ramping you up to SLIDE_MAX_SPEED.
-        const boost = THREE.MathUtils.clamp(
-            hSpeed * SLIDE_BOOST_FROM_SPEED_MULT + SLIDE_INITIAL_SPEED_OVERRIDE,
-            SLIDE_INITIAL_SPEED_OVERRIDE,
-            SLIDE_MAX_SPEED
-        );
+        // Massive initial speed kick
+        const boost = THREE.MathUtils.clamp(hSpeed * 1.4, SLIDE_INITIAL_SPEED, 55.0);
         velocity.x = slideDirection.x * boost;
         velocity.z = slideDirection.z * boost;
-        preservedSlideSpeed = boost; // remember for slide-jump preservation
-        playNoise(0.25, 0.12, 38); // Deep rumble — punchier
+        playNoise(0.2, 0.1, 40); // Deep rumble
     }
 
     if (isSliding) {
         slideTimer -= dt;
         const progress = THREE.MathUtils.clamp(1.0 - (slideTimer / SLIDE_DURATION), 0, 1);
-        // Very gradual decay — Grace slides hold their speed a LONG time before
-        // tailing off. The exponent is lower so the curve stays flatter longer.
-        const decayCurve = Math.pow(1.0 - progress, TUNING.slideDecayExponent);
-        const targetSpeed = Math.max(preservedSlideSpeed, SLIDE_INITIAL_SPEED_OVERRIDE) * decayCurve;
+        const decayCurve = Math.pow(1.0 - progress, 1.6); // lower friction: holds speed longer before tailing off
+        const targetSpeed = SLIDE_INITIAL_SPEED * decayCurve;
 
-        // Slide velocity is a blend of the slide direction (dominant) and a
-        // small steering input from current key presses (so you can curve a
-        // slide without losing all momentum). Lerp rate is low so the slide
-        // holds its line — Ultrakill slides barely steer — but high enough
-        // that you can still curve around obstacles.
-        const steerInfluence = TUNING.slideSteerInfluence;
-        velocity.x = THREE.MathUtils.lerp(velocity.x, slideDirection.x * targetSpeed + tmpMove.x * steerInfluence, dt * TUNING.slideSteerLerp);
-        velocity.z = THREE.MathUtils.lerp(velocity.z, slideDirection.z * targetSpeed + tmpMove.z * steerInfluence, dt * TUNING.slideSteerLerp);
-
-        // Apply tiny slide friction so extremely long slides eventually end
-        const sp = getHorizontalSpeed();
-        const slideDrop = sp * SLIDE_FRICTION * dt;
-        const newSp = Math.max(0, sp - slideDrop);
-        if (sp > 0.01) {
-            const scl = newSp / sp;
-            velocity.x *= scl;
-            velocity.z *= scl;
-        }
+        // Interpolate velocity: maintain heading with reduced steering influence to prevent physics whiplash
+        velocity.x = THREE.MathUtils.lerp(velocity.x, slideDirection.x * targetSpeed + tmpMove.x * 4.0, dt * 4.0);
+        velocity.z = THREE.MathUtils.lerp(velocity.z, slideDirection.z * targetSpeed + tmpMove.z * 4.0, dt * 4.0);
 
         hSpeed = getHorizontalSpeed();
-        // End conditions — note: lowering the floor from 4 to 3 so slides
-        // carry further before auto-ending.
-        if (slideTimer <= 0 || (!keys.control && isGrounded) || (isGrounded && hSpeed < 3.0)) {
+        // End conditions
+        if (slideTimer <= 0 || !keys.control || (isGrounded && hSpeed < 4.0)) {
             isSliding = false;
             slideCooldownTimer = SLIDE_COOLDOWN;
         }
-    } else {
-        preservedSlideSpeed = 0;
     }
     return hSpeed;
 }
@@ -3148,151 +2327,13 @@ function updateHorizontalVelocity(dt) {
         velocity.x = tmpMove.x * flySpeed;
         velocity.y = tmpMove.y * flySpeed;
         velocity.z = tmpMove.z * flySpeed;
-        return { cubeBoostActiveMult, speedMult };
-    }
-
-    // Don't run normal ground/air accel during a slide — slide physics
-    // own the horizontal velocity until the slide ends.
-    if (isSliding) return { cubeBoostActiveMult, speedMult };
-
-    // --- Compute normalized wishDir and wishSpeed ---
-    const wishLen = Math.hypot(tmpInput.x, tmpInput.z);
-    const hasInput = wishLen > 0.001;
-    const wishDirX = hasInput ? tmpMove.x / wishLen : 0;
-    const wishDirZ = hasInput ? tmpMove.z / wishLen : 0;
-
-    if (isGrounded) {
-        // Ground: friction (only when no input OR when below max speed) + strong accel
-        // Quake applies friction BEFORE accel — this lets you keep speed when
-        // chaining b-hops because friction is small relative to your speed.
-        if (!hasInput) {
-            applyGroundFriction(dt);
-        } else {
-            const wishSpeed = MOVE_SPEED * speedMult;
-            const totalSpeed = Math.hypot(velocity.x, velocity.z);
-
-            // --- GROUND STEERING (the "W follows my camera" fix) ---
-            // Without this, landing at 60 u/s with wishSpeed=28 means
-            // accelerate() is a no-op (you're already above cap), so your
-            // velocity direction never updates to follow the camera. Player
-            // has to use A/D to redirect — feels like the camera is broken.
-            //
-            // Fix: rotate velocity toward wishDir at a capped rate. Strong
-            // at normal speeds (full arcade control: W follows camera),
-            // weaker when way over wishSpeed (so b-hops survive but you
-            // can still curve gently).
-            if (totalSpeed > 0.5) {
-                const velDirX = velocity.x / totalSpeed;
-                const velDirZ = velocity.z / totalSpeed;
-                const currentDir = Math.atan2(velDirZ, velDirX);
-                const wishAtan = Math.atan2(wishDirZ, wishDirX);
-                let angleDiff = wishAtan - currentDir;
-                while (angleDiff > Math.PI) angleDiff -= 2 * Math.PI;
-                while (angleDiff < -Math.PI) angleDiff += 2 * Math.PI;
-
-                // Turn rate: full groundSteerTurnRate at/below wishSpeed,
-                // fading to groundSteerMinTurnRate when 2x over wishSpeed.
-                // Lets you turn sharply while running, but commits you to
-                // your b-hop direction at high over-speed.
-                let turnRate = TUNING.groundSteerTurnRate;
-                if (totalSpeed > wishSpeed) {
-                    const over = (totalSpeed - wishSpeed) / wishSpeed; // 0 at wishSpeed, 1 at 2x
-                    const range = TUNING.groundSteerTurnRate - TUNING.groundSteerMinTurnRate;
-                    turnRate = TUNING.groundSteerTurnRate - Math.min(over, 1.0) * range;
-                }
-                const maxTurn = turnRate * dt;
-                const turn = Math.max(-maxTurn, Math.min(maxTurn, angleDiff));
-                const newDir = currentDir + turn;
-                velocity.x = Math.cos(newDir) * totalSpeed;
-                velocity.z = Math.sin(newDir) * totalSpeed;
-            }
-
-            // Light friction on TOTAL speed when above wishSpeed — lets b-hops
-            // survive a few frames on the ground before decaying. Slower than
-            // the steering so you can turn AND keep speed briefly.
-            if (totalSpeed > wishSpeed) {
-                const over = totalSpeed - wishSpeed;
-                const drop = over * TUNING.groundOverSpeedFriction * dt; // slow decay
-                const newOver = Math.max(0, over - drop);
-                const target = wishSpeed + newOver;
-                const scl = target / totalSpeed;
-                velocity.x *= scl;
-                velocity.z *= scl;
-            }
-            // Re-accelerate toward wishDir up to wishSpeed (no-op if already
-            // moving faster than wishSpeed in that direction).
-            accelerate(wishDirX, wishDirZ, wishSpeed, GROUND_ACCEL, dt);
-        }
-    } else {
-        // AIR: Quake/Source-style air strafing. The cap on wishSpeed is the
-        // magic — AIR_SPEED_CAP is tiny (1.6), so holding W alone barely
-        // adds speed. But if you press A/D and turn the mouse, your wishDir
-        // is now perpendicular to your velocity, so currentSpeed (projection
-        // onto wishDir) is near zero — and accelerate() can add the full
-        // AIR_SPEED_CAP worth of speed in that new direction, INCREASING your
-        // total velocity vector magnitude. That's a strafe jump.
-        if (hasInput) {
-            // In the air, wishspeed is capped at AIR_SPEED_CAP — UNLESS
-            // we're sliding-launching (preservedSlideSpeed > 0) in which
-            // case we let the slide's speed ride along.
-            let airWishSpeed = AIR_SPEED_CAP * speedMult;
-            // Higher cap while sprinting in air so air-strafe gains are
-            // more generous when sprinting.
-            if (keys.shift) airWishSpeed *= TUNING.airSpeedSprintMult;
-            accelerate(wishDirX, wishDirZ, airWishSpeed, AIR_ACCEL, dt);
-        }
-
-        // --- AIR STEERING (the "I can actually turn" fix) ---
-        // Pure Quake air physics means holding W in the air does almost
-        // nothing to redirect you — you keep moving in your old direction.
-        // That's authentic but feels broken for players who expect "W follows
-        // the camera." This hybrid adds a separate steering channel that
-        // ROTATES the velocity vector toward wishDir at a capped rate, so:
-        //   - Holding W + turning the camera → you curve toward where you look
-        //   - Holding A/D + flicking mouse (strafe-jump) → steering is OFF
-        //     (because wishDir is perpendicular to velocity, alignment ~ 0),
-        //     so the strafe-jump tech still works for building speed.
-        // The steering strength scales with alignment, so partial-diagonal
-        // inputs get partial steering — smooth and intuitive.
-        if (hasInput) {
-            const speed = Math.hypot(velocity.x, velocity.z);
-            if (speed > 1.0) {
-                const velDirX = velocity.x / speed;
-                const velDirZ = velocity.z / speed;
-                const alignment = velDirX * wishDirX + velDirZ * wishDirZ;
-                // Only steer when pushing roughly forward (above airSteerAlignThreshold).
-                // Below that the player is strafing or backpedaling — leave
-                // their velocity alone so strafe-jumps stay pure.
-                if (alignment > TUNING.airSteerAlignThreshold) {
-                    // Squared falloff: full steering when aligned, near-zero
-                    // when barely-forward. Keeps the strafe-jump window clean.
-                    const steerStrength = Math.min(1, (alignment - TUNING.airSteerAlignThreshold) / (1 - TUNING.airSteerAlignThreshold));
-                    const currentDir = Math.atan2(velDirZ, velDirX);
-                    const wishAtan = Math.atan2(wishDirZ, wishDirX);
-                    let angleDiff = wishAtan - currentDir;
-                    while (angleDiff > Math.PI) angleDiff -= 2 * Math.PI;
-                    while (angleDiff < -Math.PI) angleDiff += 2 * Math.PI;
-                    // Max turn rate: airSteerMaxRate at full alignment.
-                    // Fast enough to feel responsive, slow enough that you
-                    // can't insta-180 in the air (which would break momentum).
-                    const maxTurn = TUNING.airSteerMaxRate * steerStrength * dt;
-                    const turn = Math.max(-maxTurn, Math.min(maxTurn, angleDiff));
-                    const newDir = currentDir + turn;
-                    velocity.x = Math.cos(newDir) * speed;
-                    velocity.z = Math.sin(newDir) * speed;
-                }
-            }
-        }
-
-        // Hard cap on total air speed to prevent runaway from parry flings,
-        // cube boosts, etc. Only enforced if we're over the limit — momentum
-        // below the cap is fully preserved (no decay).
-        const airSpeed = Math.hypot(velocity.x, velocity.z);
-        if (airSpeed > AIR_SPEED_LIMIT) {
-            const scl = AIR_SPEED_LIMIT / airSpeed;
-            velocity.x *= scl;
-            velocity.z *= scl;
-        }
+    } else if (!isSliding) {
+        // Significantly reduced friction (lerpFactor) during cube boost to preserve parry momentum
+        const lerpFactor = isGrounded
+            ? (cubeBoostTimer > 0 ? 3.0 : 11.0)
+            : (cubeBoostTimer > 0 ? 0.6 : (keys.shift ? 3.5 : 1.7));
+        velocity.x = THREE.MathUtils.lerp(velocity.x, tmpMove.x * MOVE_SPEED * speedMult, dt * lerpFactor);
+        velocity.z = THREE.MathUtils.lerp(velocity.z, tmpMove.z * MOVE_SPEED * speedMult, dt * lerpFactor);
     }
 
     return { cubeBoostActiveMult, speedMult };
@@ -3325,27 +2366,15 @@ function updateWallRunDetection(dt) {
 
     let targetTilt;
     if (nearWall && !isGrounded && !isFlying) {
-        if (!isWallRunning) {
-            // Pop upward slightly when first sticking — feels like Ultrakill
-            // wall-run "grabbing" the wall. Also refresh double jump so you
-            // can chain wall-jumps across multiple walls.
-            velocity.y = Math.max(velocity.y, TUNING.wallRunPopVel);
-            canDoubleJump = true;
-            playJump();
-        }
+        if (!isWallRunning) { velocity.y = Math.max(velocity.y, 1.5); playJump(); }
         isWallRunning = true;
         tmpAxis.copy(X_AXIS).applyAxisAngle(Y_AXIS, yaw);
-        targetTilt = tmpAxis.dot(wallNormal) * TUNING.wallRunTiltAmount; // Ultrakill lean
+        targetTilt = tmpAxis.dot(wallNormal) * 0.18;
     } else {
         isWallRunning = false;
         targetTilt = tmpInput.x * 0.08;
     }
-    // Skip camera tilt lerp during impact frames — against the flat white
-    // background, any camera.rotation.z change looks like a FOV tweak.
-    // The tilt freezes at its pre-impact value and resumes smoothly after.
-    if (!impactFlatModeActive) {
-        camera.rotation.z = THREE.MathUtils.lerp(camera.rotation.z, targetTilt, dt * TUNING.wallRunTiltLerp);
-    }
+    camera.rotation.z = THREE.MathUtils.lerp(camera.rotation.z, targetTilt, dt * 12);
 }
 
 function handleJumpInput(dt) {
@@ -3359,118 +2388,26 @@ function handleJumpInput(dt) {
     if (!wantsJump) return;
 
     const groundedJumpAvailable = isGrounded || coyoteTimer > 0;
-    // Triple jump is available when at Mach 4+ horizontal speed AND the
-    // double jump has already been used (it's a 3rd air jump, not a
-    // replacement for the 2nd). The check is real-time — drop below
-    // Mach 4 and you lose the ability instantly.
-    const hSpeedNow = Math.hypot(velocity.x, velocity.z);
-    const canTripleJump = hSpeedNow >= TUNING.mach4Speed;
-    if (!(groundedJumpAvailable || isWallRunning || canDoubleJump || canTripleJump)) return;
+    if (!(groundedJumpAvailable || isWallRunning || canDoubleJump)) return;
 
-    if (isSliding && !isDive) {
-        // GROUND SLIDE-JUMP (slam storage): launch upward but PRESERVE all
-        // horizontal momentum. preservedSlideSpeed guarantees the slide's
-        // velocity isn't clipped by the air cap when you take off. This is
-        // the cornerstone of Grace/Ultrakill movement — slide, jump, slide,
-        // jump, building speed each time. Refreshes canDoubleJump so you
-        // get an air jump after the slide-jump. ONLY for ground slides —
-        // jumping out of a DIVE (air slide) is handled below as a double
-        // jump to prevent infinite slide-jump → double-jump → dive →
-        // slide-jump fly chains.
-        velocity.y = JUMP_FORCE * TUNING.slideJumpMult;
-        // Re-assert horizontal slide velocity in case friction ate any
-        if (preservedSlideSpeed > 0 && slideDirection.lengthSq() > 0) {
-            const currentH = Math.hypot(velocity.x, velocity.z);
-            if (currentH < preservedSlideSpeed) {
-                velocity.x = slideDirection.x * preservedSlideSpeed;
-                velocity.z = slideDirection.z * preservedSlideSpeed;
-            }
-        }
+    if (isSliding) {
+        // Slide Jump: preserve momentum but launch upward
+        velocity.y = JUMP_FORCE * 1.1;
         isSliding = false;
         isSlideJump = true;
         slideCooldownTimer = SLIDE_COOLDOWN;
         canDoubleJump = true; // Allow air jump after slide launch
     } else if (isWallRunning) {
-        // WALL-JUMP: pop up + strong lateral kick in the wall's normal direction.
-        // Also keep your current forward momentum — you don't lose speed on
-        // wall-jumps, you just change direction. This is what lets you chain
-        // wall-jumps back and forth between two walls and climb indefinitely.
         velocity.y = WALL_JUMP_FORCE_UP;
         velocity.addScaledVector(wallNormal, WALL_JUMP_FORCE_SIDE);
-        // Add a small forward boost in the direction the player is looking
-        // so wall-jumping up a single wall still moves you along it.
-        const fwdX = -Math.sin(yaw);
-        const fwdZ = -Math.cos(yaw);
-        velocity.x += fwdX * TUNING.wallJumpForwardBoost;
-        velocity.z += fwdZ * TUNING.wallJumpForwardBoost;
         canDoubleJump = true; // Refresh double jump on wall contact
     } else if (groundedJumpAvailable) {
-        // B-HOP-FRIENDLY JUMP: ONLY touch velocity.y — leave horizontal
-        // velocity completely alone. This means landing and immediately
-        // jumping preserves your full horizontal speed (b-hop). The previous
-        // code did the same but the lerp-based ground accel would immediately
-        // clamp it; with Quake-style accel above wishspeed, friction barely
-        // touches you in the few frames you're on the ground.
         velocity.y = JUMP_FORCE;
         canDoubleJump = true; // First jump enables the second
-    } else if (canDoubleJump) {
-        // DOUBLE JUMP — also used to EXIT A DIVE (air slide). Treating dive-
-        // exit as a double jump (consumes canDoubleJump) instead of a slide-
-        // jump (refreshes canDoubleJump) prevents the infinite fly chain:
-        //   slide-jump (refresh) → double jump → dive → slide-jump (refresh) → ...
-        // Now: slide-jump (refresh) → double jump (consume) → dive →
-        //      double-jump-exit (consume, already empty) → fall. No more fly.
-        if (isSliding) {
-            // Exiting a dive — end the slide state before jumping.
-            isSliding = false;
-            slideCooldownTimer = SLIDE_COOLDOWN;
-        }
-        velocity.y = JUMP_FORCE * TUNING.doubleJumpMult;
-        const fwdX = -Math.sin(yaw);
-        const fwdZ = -Math.cos(yaw);
-        // Only add forward kick if it would increase speed (don't slow down
-        // a faster b-hop by forcing into a slower direction)
-        const proj = velocity.x * fwdX + velocity.z * fwdZ;
-        const kick = TUNING.doubleJumpForwardKick;
-        if (proj < kick) {
-            const add = kick - proj;
-            velocity.x += fwdX * add;
-            velocity.z += fwdZ * add;
-        }
+    } else {
+        // Pure air jump (double jump), no ground/coyote available
+        velocity.y = JUMP_FORCE;
         canDoubleJump = false; // Air jump uses it up
-    } else if (canTripleJump) {
-        // TRIPLE JUMP — only available when hSpeed ≥ Mach 4 (65 u/s).
-        // This is the reward for maintaining extreme speed: an extra air
-        // jump after the double jump. Real-time check: if you drop below
-        // Mach 4 (e.g. hit a wall, friction), canTripleJump becomes false
-        // and this branch is skipped — you fall.
-        //
-        // Unlike the double jump, the triple jump does NOT consume a
-        // persistent flag — it's purely speed-gated. As long as you stay
-        // at Mach 4+, you can triple jump again after landing. But you
-        // still need to land first to reset canDoubleJump, so this can't
-        // be chained into quadruple-jumps mid-air.
-        if (isSliding) {
-            // Exiting a dive via triple jump — end the slide state.
-            isSliding = false;
-            slideCooldownTimer = SLIDE_COOLDOWN;
-        }
-        velocity.y = JUMP_FORCE * TUNING.tripleJumpMult;
-        const fwdX = -Math.sin(yaw);
-        const fwdZ = -Math.cos(yaw);
-        // Triple jump gives a bigger forward kick than double jump —
-        // rewards maintaining Mach 4+ with extra horizontal momentum.
-        const proj = velocity.x * fwdX + velocity.z * fwdZ;
-        const kick = TUNING.tripleJumpForwardKick;
-        if (proj < kick) {
-            const add = kick - proj;
-            velocity.x += fwdX * add;
-            velocity.z += fwdZ * add;
-        }
-        // Don't set canDoubleJump — the triple jump is the last air jump.
-        // Landing will reset canDoubleJump (and the triple jump is
-        // re-enabled as long as you're still at Mach 4+ when you next
-        // need it).
     }
     isGrounded = false;
     coyoteTimer = 0;
@@ -3486,7 +2423,7 @@ function resolveWorldAndObstacleCollisions() {
     const pPos = player.position;
 
     if (pPos.y < -12) {
-        player.position.set(0, TUNING.spawnY, 0);
+        player.position.set(0, 3, 0);
         velocity.set(0, 0, 0);
         isSliding = false;
         slideCooldownTimer = 0; // No cooldown on respawn
@@ -3508,15 +2445,10 @@ function resolveWorldAndObstacleCollisions() {
     }
 
     // ground snap
-    // NOTE: only snap + set isGrounded when velocity.y <= 0 (falling or
-    // stationary). If velocity.y > 0 the player just jumped and is leaving
-    // the ground — snapping them back and marking them grounded would let
-    // them spam jump every frame and fly indefinitely. Let them leave the
-    // ground naturally; they'll be snapped when they fall back.
     isGrounded = false;
-    if (pPos.y <= currentPlayerHeight + 0.01 && velocity.y <= 0) {
+    if (pPos.y <= currentPlayerHeight + 0.01) {
         player.position.y = currentPlayerHeight;
-        velocity.y = 0;
+        if (velocity.y < 0) velocity.y = 0;
         isGrounded = true;
         coyoteTimer = COYOTE_TIME;
     }
@@ -3596,7 +2528,7 @@ function integrateAndResolveCollisions(dt) {
     if (!Number.isFinite(velocity.x) || !Number.isFinite(velocity.y) || !Number.isFinite(velocity.z) ||
         !Number.isFinite(player.position.x) || !Number.isFinite(player.position.y) || !Number.isFinite(player.position.z)) {
         console.warn("⚠️ Physics NaN/Infinity detected! Resetting position...");
-        player.position.set(0, TUNING.spawnY, 0);
+        player.position.set(0, 3, 0);
         velocity.set(0, 0, 0);
         return;
     }
@@ -3614,7 +2546,7 @@ function integrateAndResolveCollisions(dt) {
         // Safety: Prevent NaN corruption from "yeeting" the player
         if (!Number.isFinite(player.position.x) || !Number.isFinite(player.position.y) || !Number.isFinite(player.position.z)) {
             console.warn("⚠️ Physics NaN detected! Resetting position...");
-            player.position.set(0, TUNING.spawnY, 0);
+            player.position.set(0, 3, 0);
             velocity.set(0, 0, 0);
             break;
         }
@@ -3695,39 +2627,34 @@ function animate() {
     let hSpeed = getHorizontalSpeed();
 
     // --- PIZZA TOWER SPEED-O-METER ---
-    // Mach thresholds are TUNING.mach{1,2,3,4}Speed. Speedometer max is
-    // TUNING.speedOMeterMax (h-speed at which the bar is 100% full).
-    const speedPercent = Math.min((hSpeed / TUNING.speedOMeterMax) * 100, 100);
+    const speedPercent = Math.min((hSpeed / 55) * 100, 100);
     speedBarFill.style.width = speedPercent + '%';
 
     let mach = 0;
     let machColor = '#ffffff';
-    if (hSpeed > TUNING.mach5Speed) { mach = 5; machColor = '#b967ff'; }       // purple — Mach 5
-    else if (hSpeed > TUNING.mach4Speed) { mach = 4; machColor = '#f759ab'; } // hot pink
-    else if (hSpeed > TUNING.mach3Speed) { mach = 3; machColor = '#ff4d4f'; } // red
-    else if (hSpeed > TUNING.mach2Speed) { mach = 2; machColor = '#ffec3d'; } // yellow
-    else if (hSpeed > TUNING.mach1Speed) { mach = 1; machColor = '#ffffff'; } // white
+    if (hSpeed > 48) { mach = 4; machColor = '#f759ab'; }
+    else if (hSpeed > 36) { mach = 3; machColor = '#ff4d4f'; }
+    else if (hSpeed > 24) { mach = 2; machColor = '#ffec3d'; }
+    else if (hSpeed > 12) { mach = 1; machColor = '#ffffff'; }
     else { mach = 0; machColor = '#666666'; } // Mach 0 for low speeds/standing still
 
     // Pulse effect: text gets bigger as you go faster within a Mach tier
-    const pulse = 1.0 + (speedPercent / 100) * TUNING.machPulseMax;
+    const pulse = 1.0 + (speedPercent / 100) * 0.15;
     machText.style.transform = `skewX(-10deg) scale(${pulse})`;
 
     // Rank up flash effect
     if (mach > lastMach) {
         machText.style.filter = 'brightness(3) saturate(2)';
-        trackTimeout(runScopedTimeout(() => { machText.style.filter = 'none'; }, 150));
+        setTimeout(() => { machText.style.filter = 'none'; }, 150);
     }
     lastMach = mach;
 
     machText.innerText = `MACH ${mach}`;
     machText.style.color = machColor;
-    // Shake the meter and camera at high mach — but skip camera position
-    // shake during impact frames (it looks like a FOV tweak during the
-    // flat-mode visual disruption).
+    // Shake the meter and camera at high mach
     if (mach >= 3) {
         speedContainer.style.animation = 'mach-shake 0.1s infinite';
-        if (mach === 4 && screenShakeEnabled && !impactFlatModeActive) {
+        if (mach === 4 && screenShakeEnabled) {
             camera.position.x += (Math.random() - 0.5) * 0.05;
             camera.position.y += (Math.random() - 0.5) * 0.05;
         }
@@ -3739,63 +2666,24 @@ function animate() {
     const isSprinting = keys.shift && !isFlying; // For UI/FOV, not direct speed
     const { cubeBoostActiveMult } = updateHorizontalVelocity(dt);
 
-    // FOV curve now also factors in raw horizontal speed — so air strafing
-    // up to Mach 4 widens the FOV dramatically even without sprint, giving
-    // that Ultrakill "tunnel vision at speed" feel. All values are TUNING.*
-    // so the FOV curve can be retuned in one place.
-    const speedFOV = THREE.MathUtils.clamp(
-        (hSpeed - TUNING.fovSpeedStartSpeed) / TUNING.fovSpeedRange, 0, 1
-    ) * TUNING.fovSpeedBoost;
     const totalBoostForFOV = (currentSprintMultiplier * cubeBoostActiveMult) - 1.0;
-    let targetFOV = THREE.MathUtils.lerp(baseFOV, baseFOV + TUNING.fovSprintBoost, totalBoostForFOV / 1.9)
-                   + curseFactor * TUNING.fovCurseBoost
-                   + speedFOV;
-    if (isSliding) targetFOV += TUNING.fovSlideBoost;
-    // Hard cap — without this, sprint + slide + cube boost + curse can stack
-    // the FOV past 150°, which looks like the camera is broken (and induces
-    // motion sickness). TUNING.fovMax keeps the speed feel without going crazy.
-    targetFOV = Math.min(targetFOV, TUNING.fovMax);
+    let targetFOV = THREE.MathUtils.lerp(baseFOV, baseFOV + 23, totalBoostForFOV / 1.9) + curseFactor * 15;
+    if (isSliding) targetFOV += 26;
 
-    // Skip FOV lerp entirely while an impact frame is active (hitstop OR
-    // flat mode). When the impact ends, snap camera.fov to targetFOV on
-    // the first frame to eliminate the visible "catch-up" lerp that would
-    // otherwise happen as targetFOV resumes from its current (possibly
-    // shifted) value vs the frozen camera.fov.
-    if (impactFlatModeActive) {
-        // Impact active — freeze camera.fov entirely.
-        _fovWasFrozen = true;
-    } else {
-        if (_fovWasFrozen) {
-            // First frame after impact ended — snap instead of lerp.
-            camera.fov = targetFOV;
-            camera.updateProjectionMatrix();
-            _fovWasFrozen = false;
-        } else if (Math.abs(camera.fov - targetFOV) > 0.1) {
-            camera.fov = THREE.MathUtils.lerp(camera.fov, targetFOV, dt * TUNING.fovLerpRate);
-            camera.updateProjectionMatrix();
-        }
+    if (Math.abs(camera.fov - targetFOV) > 0.1) {
+        camera.fov = THREE.MathUtils.lerp(camera.fov, targetFOV, dt * 10);
+        camera.updateProjectionMatrix();
     }
 
     updateWallRunDetection(dt);
     handleJumpInput(dt);
     integrateAndResolveCollisions(dt);
 
-    // On landing: refresh double-jump eligibility (handled by canDoubleJump=false here
-    // so the NEXT grounded jump will set it back to true). isSlideJump flag reset.
-    // Horizontal momentum is preserved automatically — landing only zeros velocity.y.
     if (!isFlying && isGrounded && !wasGroundedLastFrame) { playLand(); canDoubleJump = false; isSlideJump = false; }
 
-    // Camera bobbing — amplitudes come from TUNING.bobAmount{Y,X} and the
-    // slide camera drop from TUNING.slideCameraDrop.
-    // During impact frames, freeze camera.position to (0,0) for a stable
-    // view — the bob/shake looks like a FOV tweak during the flat-mode
-    // visual disruption.
-    if (impactFlatModeActive) {
-        camera.position.x = THREE.MathUtils.lerp(camera.position.x, 0, dt * 15);
-        camera.position.y = THREE.MathUtils.lerp(camera.position.y, 0, dt * 15);
-        stepTimer = 0;
-    } else if (isSliding) {
-        camera.position.y = THREE.MathUtils.lerp(camera.position.y, TUNING.slideCameraDrop, dt * 10);
+    // Camera bobbing
+    if (isSliding) {
+        camera.position.y = THREE.MathUtils.lerp(camera.position.y, -0.2, dt * 10); // Slight camera drop for slide
         camera.position.x = THREE.MathUtils.lerp(camera.position.x, 0, dt * 10); // No X bob during slide
         stepTimer = 0; // No steps during slide
     } else {
@@ -3804,8 +2692,8 @@ function animate() {
             bobTimer += dt * hSpeed * sm;
             stepTimer += dt * hSpeed * sm;
             const curseBob = 1 + curseFactor * 1.5;
-            camera.position.y = Math.sin(bobTimer) * TUNING.bobAmountY * curseBob;
-            camera.position.x = Math.cos(bobTimer*0.5) * TUNING.bobAmountX * curseBob;
+            camera.position.y = Math.sin(bobTimer) * 0.06 * curseBob;
+            camera.position.x = Math.cos(bobTimer*0.5) * 0.04 * curseBob; // Camera X bob
             if (stepTimer >= Math.PI) { playStep(isWallRunning?0.03:0.06); stepTimer=0; }
         } else {
             camera.position.y = THREE.MathUtils.lerp(camera.position.y, 0, dt * 10); // Reset camera Y bob
@@ -3814,8 +2702,7 @@ function animate() {
         }
     }
 
-    // Curse camera shake — skip during impact frames (looks like FOV tweak).
-    if (curseFactor > 0.6 && screenShakeEnabled && !impactFlatModeActive) {
+    if (curseFactor > 0.6 && screenShakeEnabled) {
         const shakeAmt = (curseFactor - 0.6) * 0.018;
         camera.position.x += (Math.random()-0.5) * shakeAmt;
         camera.position.y += (Math.random()-0.5) * shakeAmt;
@@ -3855,27 +2742,20 @@ function animate() {
             playCollect(cubesCollected);
             cubeBoostTimer = 2.5; // 2.5 second speed boost on collection
 
-            // Parry-style fling: launch the player in the direction they are looking.
-            // Tuned for Ultrakill/Grace — bigger base launch, harder fall-speed
-            // reward (diving into a cube gives a HUGE horizontal fling), and a
-            // higher vertical pop so you can chain into another slide-jump.
-            // All magnitudes are TUNING.parry* so the fling can be retuned in
-            // one place.
+            // Parry-style fling: launch the player in the direction they are looking
+            // Now significantly rewards vertical speed (diving) for massive horizontal launches
+            const parryBase = 45.0;
             const currentHSpeed = new THREE.Vector2(velocity.x, velocity.z).length();
             const fallSpeed = Math.max(0, -velocity.y); // Capture downward momentum
 
             // Calculate the horizontal launch magnitude, incorporating fallSpeed
-            const horizontalLaunchMag = Math.min(
-                TUNING.parryBase + (currentHSpeed * TUNING.parryHSpeedMult) + (fallSpeed * TUNING.parryFallSpeedMult),
-                AIR_SPEED_LIMIT * 1.15 // just slightly above cap so the parry feels rewarding
-            );
+            const horizontalLaunchMag = parryBase + (currentHSpeed * 1.5) + (fallSpeed * 10.0);
 
             camera.getWorldDirection(tmpToPlayer);
             const horizontalCameraDir = new THREE.Vector3(tmpToPlayer.x, 0, tmpToPlayer.z).normalize();
             velocity.x = horizontalCameraDir.x * horizontalLaunchMag;
             velocity.z = horizontalCameraDir.z * horizontalLaunchMag;
-            velocity.y = JUMP_FORCE * TUNING.parryVerticalMult;
-            preservedSlideSpeed = Math.max(preservedSlideSpeed, horizontalLaunchMag);
+            velocity.y = JUMP_FORCE * 1.5; // Set vertical velocity to a fixed jump force
 
             isGrounded = false;
             isSliding = false;
@@ -3893,7 +2773,7 @@ function animate() {
             }
 
             if (cubesCollected === 20 && gameMode !== 'survival') {
-                trackTimeout(runScopedTimeout(() => endGame('win'), 1500));
+                setTimeout(() => endGame('win'), 1500);
             }
         }
     }
@@ -3980,7 +2860,7 @@ function animate() {
                 playTone(45, 'sawtooth', 0.9, 0.5);
                 playTone(90, 'sawtooth', 0.9, 0.3);
 
-                trackTimeout(runScopedTimeout(() => {
+                setTimeout(() => {
                     jsOverlay.style.display = 'none';
 
                     if (gameMode === 'survival') {
@@ -3988,16 +2868,16 @@ function animate() {
                         return;
                     }
 
-                    player.position.set(0, TUNING.spawnY, 0);
+                    player.position.set(0, 3, 0);
                     velocity.set(0, 0, 0);
                     isSliding = false;
                     slideCooldownTimer = 0;
                     isWallRunning = false;
-                    yaw = 0;
+                    yaw = 0; 
                     pitch = 0;
                     camera.rotation.x = 0;
                     player.rotation.y = 0;
-
+                    
                     for (let m2i = 0; m2i < monsters.length; m2i++) {
                         const m2 = monsters[m2i];
                         const ang = Math.random() * Math.PI * 2;
@@ -4006,7 +2886,7 @@ function animate() {
                     
                     isJumpscareActive = false;
                     instructions.style.display = 'block';
-                }, 1500));
+                }, 1500);
             }
         }
     }
@@ -4018,13 +2898,10 @@ function animate() {
             // Mark beat drop occurred and play impact; don't force fog overrides
             beatDropTriggered = true;
             triggerImpactFrame({ color: '#ff1414', duration: 320, hitstop: 90 }); // beat-drop punch
-            // Ensure fog is recalculated after the flat impact effect ends.
-            // runScopedTimeout so this is dropped if the player quick-restarts
-            // during the 360ms window (otherwise stale updateCurse could fight
-            // the new run's curse state).
-            trackTimeout(runScopedTimeout(() => {
+            // Ensure fog is recalculated after the flat impact effect ends
+            setTimeout(() => {
                 try { updateCurse(); } catch (e) { /* ignore */ }
-            }, 360));
+            }, 360);
         }
     }
 
