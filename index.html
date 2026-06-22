@@ -602,6 +602,65 @@ const TUNING = {
     startPlatformHeight: 1.5,   // height
     startPlatformColor: 0x888888,
 
+    // --- 19. MONSTER AI (shared) ---
+    monsterSpeedBase: 5.5,        // base speed for Stalkers before curse/rage/difficulty scaling
+    monsterSpawnDistMin: 200,     // min distance from player when spawning (u)
+    monsterSpawnDistRange: 150,   // random range added to spawn dist (u)
+    monsterCatchRespawnDist: 200, // distance monsters are teleported after a catch/jumpscare (u)
+    monsterFlareRadius: 70,       // flare push-back radius (u)
+    monsterFlarePushDist: 16,     // how far flare pushes monsters back (u)
+    monsterFlareStunDuration: 3.0,// how long flare stuns monsters (s)
+    monsterCatchProximityAudioDist: 80, // distance at which heartbeat/vignette starts (u)
+
+    // --- 20. STALKER AI ---
+    stalkerScaleMin: 3.6,         // min random scale for Stalker body
+    stalkerScaleRange: 1.4,       // random range added to scale
+    stalkerRageDetectionDist: 90, // distance within which rage builds (u)
+    stalkerRageBuildRate: 0.18,   // rage gained per second while in detection range
+    stalkerRageDecayRate: 0.06,   // rage lost per second while outside detection range
+    stalkerRageSpeedBonus: 3.2,   // extra speed per rage point (0..1)
+    stalkerCurseSpeedBonus: 2.5,  // extra speed per curse point (0..1)
+    stalkerWanderDistThresh: 150, // distance threshold to enter wander state (u)
+    stalkerStalkDistThresh: 60,   // distance threshold to enter stalk state (u)
+    stalkerHuntDistThresh: 22,    // distance threshold to enter hunt/lunge state (u)
+    stalkerWanderSpeedMult: 0.32, // speed multiplier in wander state
+    stalkerStalkSpeedMult: 0.62,  // speed multiplier in stalk state
+    stalkerHuntSpeedMult: 1.0,    // speed multiplier in hunt state
+    stalkerLungeSpeedMult: 1.65,  // speed multiplier in lunge state
+    stalkerLungeDuration: 1.0,    // how long a lunge lasts (s)
+    stalkerLungeCooldown: 1.5,    // cooldown between lunges (s)
+    stalkerLungeCooldownOnCatch: 2.0, // cooldown set on monster after a catch reset (s)
+    stalkerStalkTargetDist: 90,   // ideal orbit distance while stalking (u)
+    stalkerStalkRadialPull: 0.02, // how strongly the Stalker corrects orbit distance
+    stalkerStalkDirFlipMin: 5,    // min seconds before stalk direction can flip (s)
+    stalkerStalkDirFlipRange: 4,  // random range added to flip timer (s)
+    stalkerWanderUpdateMin: 4,    // min seconds between wander target picks (s)
+    stalkerWanderUpdateRange: 5,  // random range added to wander update timer (s)
+    stalkerWanderDistMin: 40,     // min wander target distance (u)
+    stalkerWanderDistRange: 90,   // random range added to wander target distance (u)
+    stalkerWanderArrivalThresh: 6, // distance to wander target before picking a new one (u)
+    stalkerHuntLeadTime: 0.35,    // prediction lead time for chase (s)
+    stalkerLungeLeadTime: 0.15,   // prediction lead time during lunge (s)
+    stalkerHuntScreamDist: 55,    // max distance for hunt-entry scream (u)
+    stalkerHuntScreamChance: 0.5, // chance to scream on entering hunt state
+    stalkerStalkWhisperDist: 120, // max distance for stalk-entry whisper (u)
+    stalkerStalkWhisperChance: 0.35, // chance to whisper on entering stalk from wander
+    stalkerTwitchIntervalMin: 0.04, // min twitch jitter interval during hunt/lunge (s)
+    stalkerTwitchIntervalRange: 0.09, // random range added to twitch interval (s)
+    stalkerTwitchMagnitude: 0.35,   // max positional jitter per twitch (u)
+
+    // --- 21. HOUND AI ---
+    houndScaleMin: 2.6,           // min random scale for Hound body
+    houndScaleRange: 0.6,         // random range added to scale
+    houndAccelBase: 12.0,         // baseline acceleration when heading is aligned (u/s²)
+    houndAccelPerSpeed: 0.95,     // extra acceleration per unit of current speed (u/s²)
+    houndDecelPerRad: 18.0,       // speed lost per radian of heading error (u/s)
+    houndSpeedMin: 2.5,           // minimum speed (u/s) — Hound never fully stops
+    houndSpeedMaxBase: 12.0,      // top speed before difficulty multiplier (u/s)
+    houndTurnRate: 3.2,           // max heading rotation rate (rad/s)
+    houndLeadPredictTime: 0.25,   // how far ahead the Hound predicts player movement (s)
+    houndResetSpeed: 2.5,         // speed set after catch/respawn (u/s)
+
     // --- 18. LIGHTING & ATMOSPHERE ---
     // Global brightness multiplier applied on top of all other lighting.
     // 1.0 = default. 1.3 = noticeably brighter. 1.6 = very bright / noon sun.
@@ -1638,7 +1697,7 @@ function updateMonsterBeacons(dt) {
 
 // ===================== MONSTERS =====================
 const monsters = [];
-const MONSTER_SPEED_BASE = 5.5;
+const MONSTER_SPEED_BASE = TUNING.monsterSpeedBase;
 let flashlight = null;
 let flashlightEnabled = false;
 
@@ -1768,7 +1827,7 @@ function createStalker() {
     // backward-bent animal legs, and a pulsing dark aura.
     // AI: state-machine (wander → stalk → hunt → lunge) with rage meter.
     const group = new THREE.Group();
-    const S = 3.6 + Math.random() * 1.4; // taller than before
+    const S = TUNING.stalkerScaleMin + Math.random() * TUNING.stalkerScaleRange;
 
     // ----- materials (cached per-monster so we can modulate them at runtime) -----
     const fleshMat = new THREE.MeshPhongMaterial({
@@ -1944,7 +2003,7 @@ function createStalker() {
 
     // ----- spawn position (far from player) -----
     const angle = Math.random() * Math.PI * 2;
-    const dist = 200 + Math.random() * 150;
+    const dist = TUNING.monsterSpawnDistMin + Math.random() * TUNING.monsterSpawnDistRange;
     group.position.set(Math.cos(angle) * dist, 0, Math.sin(angle) * dist);
 
     group.userData = {
@@ -1987,7 +2046,7 @@ function createHound() {
     // Stalker — low-slung quadruped, single cyclops eye, lolling tongue,
     // bony ribs and spine, pale hide vs. the Stalker's dark red flesh.
     const group = new THREE.Group();
-    const S = 2.6 + Math.random() * 0.6; // lower to the ground than Stalker
+    const S = TUNING.houndScaleMin + Math.random() * TUNING.houndScaleRange;
 
     // ----- materials -----
     const hideMat = new THREE.MeshPhongMaterial({
@@ -2103,7 +2162,7 @@ function createHound() {
 
     // ----- spawn far from player -----
     const angle = Math.random() * Math.PI * 2;
-    const dist = 200 + Math.random() * 150;
+    const dist = TUNING.monsterSpawnDistMin + Math.random() * TUNING.monsterSpawnDistRange;
     group.position.set(Math.cos(angle) * dist, 0, Math.sin(angle) * dist);
 
     group.userData = {
@@ -2119,7 +2178,7 @@ function createHound() {
         // its heading aligns with the direction to the player, and loses
         // speed proportional to how much it has to turn.
         heading: new THREE.Vector3(Math.cos(angle), 0, Math.sin(angle)),
-        currentSpeed: 2.5,
+        currentSpeed: TUNING.houndSpeedMin,
         topSpeed: 12.0, // updated each frame from difficulty
         // ---- refs for animation ----
         refs: { aura, eye, eyeHalo, legs, tailPivot, headGroup, tongue }
@@ -2392,11 +2451,11 @@ function useAbility() {
         const dx = m.position.x - player.position.x;
         const dz = m.position.z - player.position.z;
         const distSq = dx * dx + dz * dz;
-        if (distSq < 70 * 70) {
+        if (distSq < TUNING.monsterFlareRadius * TUNING.monsterFlareRadius) {
             const dist = Math.sqrt(distSq) || 1;
-            m.position.x += (dx / dist) * 16;
-            m.position.z += (dz / dist) * 16;
-            m.userData.stunTimer = 3.0;
+            m.position.x += (dx / dist) * TUNING.monsterFlarePushDist;
+            m.position.z += (dz / dist) * TUNING.monsterFlarePushDist;
+            m.userData.stunTimer = TUNING.monsterFlareStunDuration;
         }
     }
     showCurseMsg('FLARE DEPLOYED', 1200);
@@ -3491,7 +3550,7 @@ function quickRestart() {
         // Reset AI state for the appropriate kind so neither carries
         // stale hunt/lunge momentum into the new run.
         if (m.userData.kind === 'hound') {
-            m.userData.currentSpeed = 2.5;
+            m.userData.currentSpeed = TUNING.houndResetSpeed;
             m.userData.heading.set(Math.cos(ang), 0, Math.sin(ang));
         } else {
             m.userData.aiState = 'wander';
@@ -5191,18 +5250,18 @@ function animate() {
                 // to how sharply it has to turn. This makes it terrifying in
                 // open terrain but weaker when the player jukes around
                 // obstacles or cuts hard.
-                const HOUND_ACCEL_BASE    = 12.0;  // units/sec² baseline accel when aligned (was 7.0 — Hounds now wind up much faster)
-                const HOUND_ACCEL_SPEED   = 0.95;  // extra accel per unit of current speed (was 0.55 — opens up harder at speed)
-                const HOUND_DECEL_PER_RAD = 18.0;  // units/sec lost per radian of heading error
-                const HOUND_SPEED_MIN     = 2.5;
-                const HOUND_SPEED_MAX_BASE = 12.0; // top speed before difficulty mult
-                const HOUND_TURN_RATE     = 3.2;   // rad/sec — how fast heading can rotate
+                const HOUND_ACCEL_BASE    = TUNING.houndAccelBase;
+                const HOUND_ACCEL_SPEED   = TUNING.houndAccelPerSpeed;
+                const HOUND_DECEL_PER_RAD = TUNING.houndDecelPerRad;
+                const HOUND_SPEED_MIN     = TUNING.houndSpeedMin;
+                const HOUND_SPEED_MAX_BASE = TUNING.houndSpeedMaxBase;
+                const HOUND_TURN_RATE     = TUNING.houndTurnRate;
                 // Difficulty-scaled acceleration: harder diffs = Hounds snap to top speed faster.
                 const HOUND_ACCEL_MULT    = (diffSettings.houndAccelMult != null) ? diffSettings.houndAccelMult : 1.0;
 
                 // Lead-prediction target (always knows where player is going).
-                const predictX = player.position.x + velocity.x * 0.25;
-                const predictZ = player.position.z + velocity.z * 0.25;
+                const predictX = player.position.x + velocity.x * TUNING.houndLeadPredictTime;
+                const predictZ = player.position.z + velocity.z * TUNING.houndLeadPredictTime;
                 const dxH = predictX - m.position.x;
                 const dzH = predictZ - m.position.z;
                 const dH = Math.sqrt(dxH*dxH + dzH*dzH) || 1;
@@ -5264,21 +5323,21 @@ function animate() {
                 // ---- RAGE meter: builds while the player is in detection range,
                 //      decays slowly when the player escapes. Higher rage = faster
                 //      top speed and a brighter aura/eyes.
-                if (dist < 90) {
-                    m.userData.rage = Math.min(1, m.userData.rage + dt * 0.18);
+                if (dist < TUNING.stalkerRageDetectionDist) {
+                    m.userData.rage = Math.min(1, m.userData.rage + dt * TUNING.stalkerRageBuildRate);
                 } else {
-                    m.userData.rage = Math.max(0, m.userData.rage - dt * 0.06);
+                    m.userData.rage = Math.max(0, m.userData.rage - dt * TUNING.stalkerRageDecayRate);
                 }
 
                 // ---- STATE MACHINE ----
-                //   wander  (dist > 150)  : patrol randomly, low speed
-                //   stalk   (60 < d < 150) : circle the player, occasional whisper
-                //   hunt    (20 < d < 60)  : direct chase with prediction
+                //   wander  (dist > stalkerWanderDistThresh)  : patrol randomly, low speed
+                //   stalk   (stalkerStalkDistThresh < d < stalkerWanderDistThresh) : circle the player, occasional whisper
+                //   hunt    (stalkerHuntDistThresh < d < stalkerStalkDistThresh)  : direct chase with prediction
                 //   lunge   (d < 20)       : telegraphed dash, very fast, short
                 newState = m.userData.aiState;
-                if (dist > 150)        newState = 'wander';
-                else if (dist > 60)    newState = 'stalk';
-                else if (dist > 22)    newState = 'hunt';
+                if (dist > TUNING.stalkerWanderDistThresh)        newState = 'wander';
+                else if (dist > TUNING.stalkerStalkDistThresh)    newState = 'stalk';
+                else if (dist > TUNING.stalkerHuntDistThresh)    newState = 'hunt';
                 else                   newState = 'lunge';
 
                 // State transitions: trigger sound effects on entry.
@@ -5286,14 +5345,14 @@ function animate() {
                     const prev = m.userData.aiState;
                     m.userData.aiState = newState;
                     m.userData.stateTimer = 0;
-                    if (newState === 'hunt' && prev !== 'lunge' && dist < 55 && Math.random() < 0.5) {
+                    if (newState === 'hunt' && prev !== 'lunge' && dist < TUNING.stalkerHuntScreamDist && Math.random() < TUNING.stalkerHuntScreamChance) {
                         playMonsterScream();
                     }
                     if (newState === 'lunge') {
-                        m.userData.lungeTimer = 1.0;
+                        m.userData.lungeTimer = TUNING.stalkerLungeDuration;
                         playMonsterScream();
                     }
-                    if (newState === 'stalk' && prev === 'wander' && dist < 120 && Math.random() < 0.35) {
+                    if (newState === 'stalk' && prev === 'wander' && dist < TUNING.stalkerStalkWhisperDist && Math.random() < TUNING.stalkerStalkWhisperChance) {
                         playMonsterWhisper();
                     }
                 }
@@ -5306,12 +5365,12 @@ function animate() {
                 // (stacks on top of the generic speedMult). At higher diffs Stalkers are
                 // noticeably faster out of the gate, before rage/curse even kick in.
                 const STALKER_DIFF_MULT = (diffSettings.stalkerSpeedMult != null) ? diffSettings.stalkerSpeedMult : 1.0;
-                const baseSpeed = (MONSTER_SPEED_BASE + curseFactor * 2.5 + m.userData.rage * 3.2) * diffSettings.speedMult * STALKER_DIFF_MULT;
+                const baseSpeed = (MONSTER_SPEED_BASE + curseFactor * TUNING.stalkerCurseSpeedBonus + m.userData.rage * TUNING.stalkerRageSpeedBonus) * diffSettings.speedMult * STALKER_DIFF_MULT;
                 speed = baseSpeed;
-                if (newState === 'wander')      speed *= 0.32;
-                else if (newState === 'stalk')  speed *= 0.62;
-                else if (newState === 'hunt')   speed *= 1.0;
-                else if (newState === 'lunge')  speed *= 1.65;
+                if (newState === 'wander')      speed *= TUNING.stalkerWanderSpeedMult;
+                else if (newState === 'stalk')  speed *= TUNING.stalkerStalkSpeedMult;
+                else if (newState === 'hunt')   speed *= TUNING.stalkerHuntSpeedMult;
+                else if (newState === 'lunge')  speed *= TUNING.stalkerLungeSpeedMult;
 
                 // ---- MOVEMENT per state ----
                 if (distSq > 0.0001 && !isJumpscareActive) {
@@ -5322,11 +5381,11 @@ function animate() {
                         const dxT = wt.x - m.position.x;
                         const dzT = wt.z - m.position.z;
                         const dT = Math.sqrt(dxT*dxT + dzT*dzT);
-                        if (dT < 6 || m.userData.nextWanderUpdate <= 0) {
+                        if (dT < TUNING.stalkerWanderArrivalThresh || m.userData.nextWanderUpdate <= 0) {
                             const wa = Math.random() * Math.PI * 2;
-                            const wd = 40 + Math.random() * 90;
+                            const wd = TUNING.stalkerWanderDistMin + Math.random() * TUNING.stalkerWanderDistRange;
                             wt.set(m.position.x + Math.cos(wa) * wd, 0, m.position.z + Math.sin(wa) * wd);
-                            m.userData.nextWanderUpdate = 4 + Math.random() * 5;
+                            m.userData.nextWanderUpdate = TUNING.stalkerWanderUpdateMin + Math.random() * TUNING.stalkerWanderUpdateRange;
                         } else {
                             m.position.x += (dxT / dT) * speed * dt;
                             m.position.z += (dzT / dT) * speed * dt;
@@ -5337,7 +5396,7 @@ function animate() {
                         // Circle the player at a comfortable distance, sometimes
                         // switching direction to feel predatory and unpredictable.
                         m.userData.stateTimer += dt;
-                        if (m.userData.stateTimer > 5 + Math.random() * 4) {
+                        if (m.userData.stateTimer > TUNING.stalkerStalkDirFlipMin + Math.random() * TUNING.stalkerStalkDirFlipRange) {
                             m.userData.stalkDir *= -1;
                             m.userData.stateTimer = 0;
                             if (Math.random() < 0.4) playMonsterWhisper();
@@ -5349,8 +5408,8 @@ function animate() {
                         const perpX = -radZ * m.userData.stalkDir;
                         const perpZ =  radX * m.userData.stalkDir;
                         // pull in / push out to maintain ~90 unit ring
-                        const targetDist = 90;
-                        const radialAdjust = (dist - targetDist) * 0.02;
+                        const targetDist = TUNING.stalkerStalkTargetDist;
+                        const radialAdjust = (dist - targetDist) * TUNING.stalkerStalkRadialPull;
                         const moveX = (perpX + radX * radialAdjust) * speed * dt;
                         const moveZ = (perpZ + radZ * radialAdjust) * speed * dt;
                         m.position.x += moveX;
@@ -5360,8 +5419,8 @@ function animate() {
                     }
                     else {
                         // hunt & lunge: chase with lead-prediction based on player velocity.
-                        let leadTime = 0.35;
-                        if (newState === 'lunge') leadTime = 0.15;
+                        let leadTime = TUNING.stalkerHuntLeadTime;
+                        if (newState === 'lunge') leadTime = TUNING.stalkerLungeLeadTime;
                         const predictX = player.position.x + velocity.x * leadTime;
                         const predictZ = player.position.z + velocity.z * leadTime;
                         const dxP = predictX - m.position.x;
@@ -5376,7 +5435,7 @@ function animate() {
                             if (m.userData.lungeTimer <= 0) {
                                 // Lunge spent — drop back to hunt, brief cooldown.
                                 m.userData.aiState = 'hunt';
-                                m.userData.lungeCooldown = 1.5;
+                                m.userData.lungeCooldown = TUNING.stalkerLungeCooldown;
                             }
                         }
                     }
@@ -5387,11 +5446,11 @@ function animate() {
                     m.userData.twitchTimer -= dt;
                     if (m.userData.twitchTimer <= 0) {
                         m.userData.twitchOffset.set(
-                            (Math.random() - 0.5) * 0.35,
+                            (Math.random() - 0.5) * TUNING.stalkerTwitchMagnitude,
                             0,
-                            (Math.random() - 0.5) * 0.35
+                            (Math.random() - 0.5) * TUNING.stalkerTwitchMagnitude
                         );
-                        m.userData.twitchTimer = 0.04 + Math.random() * 0.09;
+                        m.userData.twitchTimer = TUNING.stalkerTwitchIntervalMin + Math.random() * TUNING.stalkerTwitchIntervalRange;
                     }
                 } else {
                     m.userData.twitchOffset.multiplyScalar(0.88);
@@ -5577,13 +5636,13 @@ function animate() {
                     for (let m2i = 0; m2i < monsters.length; m2i++) {
                         const m2 = monsters[m2i];
                         const ang = Math.random() * Math.PI * 2;
-                        m2.position.set(Math.cos(ang) * 200 + player.position.x, 0, Math.sin(ang) * 200 + player.position.z);
+                        m2.position.set(Math.cos(ang) * TUNING.monsterCatchRespawnDist + player.position.x, 0, Math.sin(ang) * TUNING.monsterCatchRespawnDist + player.position.z);
                         // Reset AI state for the appropriate kind so neither
                         // immediately re-catches the player after the teleport.
                         if (m2.userData.kind === 'hound') {
                             // Point the Hound back toward the player but kill its
                             // momentum — gives the player a brief window to escape.
-                            m2.userData.currentSpeed = 2.5;
+                            m2.userData.currentSpeed = TUNING.houndResetSpeed;
                             const dxRP = player.position.x - m2.position.x;
                             const dzRP = player.position.z - m2.position.z;
                             const dRP = Math.sqrt(dxRP*dxRP + dzRP*dzRP) || 1;
@@ -5593,7 +5652,7 @@ function animate() {
                             m2.userData.aiState = 'wander';
                             m2.userData.rage = 0;
                             m2.userData.lungeTimer = 0;
-                            m2.userData.lungeCooldown = 2.0;
+                            m2.userData.lungeCooldown = TUNING.stalkerLungeCooldownOnCatch;
                         }
                     }
                     
@@ -5608,8 +5667,8 @@ function animate() {
         if (!isJumpscareActive && closestDistSqThisFrame !== Infinity) {
             const closestDist = Math.sqrt(closestDistSqThisFrame);
             // Heartbeat only triggers when something is within ~80m and hunting.
-            if (closestDist < 80) {
-                const intensity = 1 - (closestDist / 80); // 0..1
+            if (closestDist < TUNING.monsterCatchProximityAudioDist) {
+                const intensity = 1 - (closestDist / TUNING.monsterCatchProximityAudioDist); // 0..1
                 playMonsterHeartbeat(intensity);
                 // Vignette pulse: scale the existing #vignette element with rage color.
                 if (vignette) {
