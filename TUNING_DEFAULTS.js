@@ -55,10 +55,46 @@ const TUNING = {
     // DECREASE: more deliberate pace, easier platforming, but the game
     //   feels sluggish and the Mach meter rarely climbs past Mach 1.
     // INTERACTS WITH: sprintMult (final top speed = moveSpeed × sprintMult),
-    //   groundAccel (how fast you reach this), airSpeedCap (air is capped
+    //   groundAccel (how fast you reach this), airMoveSpeed (air is capped
     //   much lower to enable strafe-jumping tech).
     // SAFE RANGE: 12-25.
     moveSpeed: 18.0,
+
+    // Base air wish-speed cap — the air-equivalent of moveSpeed. This is
+    // THE strafe-jump magic number. It's intentionally tiny so that:
+    //   - Holding W in the air barely adds speed (the cap is so low that
+    //     accelerate() can only add a hair of velocity per frame in the
+    //     wishDir).
+    //   - But if you press A/D AND turn the mouse, your wishDir becomes
+    //     perpendicular to your current velocity. Now the projection of
+    //     your velocity onto wishDir is near zero, so accelerate() can
+    //     add the FULL airMoveSpeed worth of velocity in that new
+    //     direction — INCREASING your total speed vector magnitude.
+    //     That's a strafe jump.
+    //
+    // The actual air wish-speed used per frame is:
+    //   airMoveSpeed × sprintMult × (airSpeedSprintMult if sprinting)
+    //
+    // INCREASE: air movement is more responsive, holding W actually adds
+    //   speed, easier to redirect in the air.
+    //   - At 5+, holding W in air accelerates you — no strafe needed.
+    //   - At 10+, the strafe-jump TECHNIQUE becomes pointless (any
+    //     direction adds speed, no skill required).
+    // DECREASE: strafe-jumping gives smaller gains, air control feels
+    //   sluggish, harder to build speed in air.
+    //   - At 0.5, only master-class strafe-jumpers will build any speed.
+    //   - At 0, you can't change direction in the air at all.
+    // INTERACTS WITH: airAccel (the acceleration rate applied to this cap),
+    //   airSpeedSprintMult (sprint multiplier on this cap),
+    //   airSpeedLimit (hard cap on total air speed, separate from this).
+    // SAFE RANGE: 1.0-3.0. Outside this range, the strafe-jump tech breaks.
+    airMoveSpeed: 1.6,
+
+    // (DEPRECATED) Legacy name for airMoveSpeed. Kept as a backwards-compat
+    // alias so saved TUNING configs that only set airSpeedCap still work.
+    // New code should use airMoveSpeed instead. If both are set, airSpeedCap
+    // takes precedence for backwards compatibility.
+    airSpeedCap: 1.6,
 
     // Sprint multiplier applied to moveSpeed when Shift is held. Final
     // running speed = moveSpeed × sprintMult. So with defaults:
@@ -153,6 +189,30 @@ const TUNING = {
     // DECREASE: double jumps are nearly vertical. At 0, no horizontal kick.
     // SAFE RANGE: 0-15.
     doubleJumpForwardKick: 8.0,
+
+    // Multiplier on jumpForce when performing a triple jump. Triple jumps
+    // only trigger at Mach 4+ (see mach4Speed). Default 1.0 means the triple
+    // jump has the same vertical pop as a base jump — the reward is the
+    // forward kick (tripleJumpForwardKick), not extra height.
+    // INCREASE: triple jumps launch higher, easier to chain into air routes.
+    // DECREASE: triple jumps are flatter, more horizontal.
+    //   - At 0.5, triple jumps barely leave the ground.
+    // INTERACTS WITH: jumpForce (base), tripleJumpForwardKick (horizontal),
+    //   mach4Speed (minimum speed to trigger).
+    // SAFE RANGE: 0.8-1.5.
+    tripleJumpMult: 1.0,
+
+    // Forward velocity added in the look direction when triple-jumping.
+    // Triple jumps are the reward for reaching Mach 4+ — a big horizontal
+    // fling that preserves momentum. Default 12.0 is slightly bigger than
+    // the double-jump kick (8.0) so the triple feels like an upgrade.
+    // INCREASE: triple jumps fling you further, more rewarding at top speed.
+    // DECREASE: triple jumps feel underwhelming.
+    //   - At 0, the triple jump is just a vertical hop with no forward boost.
+    // INTERACTS WITH: tripleJumpMult (vertical component),
+    //   mach4Speed (minimum speed to trigger).
+    // SAFE RANGE: 8.0-20.0.
+    tripleJumpForwardKick: 12.0,
 
     // Grace window (seconds) after walking off a ledge where a jump still
     // counts as "grounded". Lets you press jump a fraction of a second
@@ -304,33 +364,29 @@ const TUNING = {
     groundFriction: 6.0,
 
     // Air acceleration rate. Much higher than groundAccel, but the actual
-    // speed added per frame is bounded by airSpeedCap × airAccel × dt.
+    // speed added per frame is bounded by airMoveSpeed × airAccel × dt.
     // The high value here is what makes air-strafing responsive — flick
     // the mouse + A/D and you feel the curve immediately.
     // INCREASE: air-strafing is more responsive, you can curve faster.
     // DECREASE: air-strafing feels sluggish, harder to build speed in air.
-    // INTERACTS WITH: airSpeedCap (this is the multiplier; cap is the
-    //   actual speed added per frame).
+    // INTERACTS WITH: airMoveSpeed (this is the multiplier; airMoveSpeed is
+    //   the actual speed cap added per frame — see section 1 CORE MOVEMENT).
     // SAFE RANGE: 50-150.
     airAccel: 90.0,
 
-    // The actual speed cap that air-accel can add per frame in the wish
-    // direction. This is THE strafe-jump magic number — it's tiny so
-    // holding W in the air barely adds speed, but turning the mouse + A/D
-    // redirects your wishDir to be perpendicular to velocity, so the cap
-    // applies to a NEW direction and ADDS to your total speed.
-    // INCREASE: air-strafe gains are bigger but the strafe-jump TECHNIQUE
-    //   becomes less important (any direction adds speed).
-    //   At 5, holding W in air actually accelerates you — no strafe needed.
-    // DECREASE: strafe-jumping gives smaller gains. At 0.5, only master-
-    //   class strafe-jumpers will build any speed in the air.
+    // (DEPRECATED — see airMoveSpeed in section 1 CORE MOVEMENT instead)
+    // This is the legacy name for the air wish-speed cap. It's kept here
+    // as a backwards-compat alias so saved TUNING configs that set
+    // airSpeedCap still work. New code and configs should use airMoveSpeed.
+    // The value here mirrors airMoveSpeed: 1.6 — if you change one, change
+    // both (or just delete this line and rely on airMoveSpeed alone).
     // INTERACTS WITH: airAccel (the multiplier on this),
     //   airSpeedSprintMult (sprint multiplier on this).
     // SAFE RANGE: 1.0-3.0. Outside this range, the strafe-jump tech breaks.
     airSpeedCap: 1.6,
 
-    // Multiplier on airSpeedCap while sprint is held. Gives slightly more
-    // generous air-strafe gains when sprinting.
+    // Multiplier on airMoveSpeed (and legacy airSpeedCap) while sprint is
+    // held. Gives slightly more generous air-strafe gains when sprinting.
     // INCREASE: sprinting in air gives bigger strafe gains.
     // DECREASE: sprinting in air gives no advantage. At 1.0, sprint has
     //   no effect on air strafing.
@@ -732,6 +788,15 @@ const TUNING = {
     // SAFE RANGE: 50-80. Must be > mach3Speed.
     mach4Speed: 65,
 
+    // Horizontal speed at which the Mach meter shows "MACH 5".
+    // Default 85 — requires slide-jump chains or parry flings to reach.
+    // Must be > mach4Speed.
+    // INCREASE: Mach 5 is harder to reach, more elite.
+    // DECREASE: Mach 5 is easier to reach, more common at high speed.
+    // INTERACTS WITH: mach4Speed (must be > this).
+    // SAFE RANGE: 75-100. Must be > mach4Speed.
+    mach5Speed: 85,
+
     // Horizontal speed at which the speed bar is 100% full.
     // INCREASE: bar fills slower, more headroom for top speeds.
     // DECREASE: bar fills faster, maxes out earlier.
@@ -942,4 +1007,118 @@ const TUNING = {
     // Use any hex color — 0xff0000 = red, 0x00ff00 = green, etc.
     // SAFE RANGE: any valid hex color.
     startPlatformColor: 0x888888,
+
+    // =================================================================
+    // 18. CURSE & ATMOSPHERE — fog, sky, lighting that shift with curse
+    // (these drive the visual horror escalation as cubes are collected)
+    // =================================================================
+
+    // Fog density at curseFactor = 0 (start of run, no cubes collected).
+    // 0.0 means no fog at all — clear visibility across the map.
+    // INCREASE: the game starts foggier, less visibility from the start.
+    // DECREASE: clearer start. At 0, no fog until curse builds.
+    // INTERACTS WITH: fogDensityBase (the baseline once curse > 0.15),
+    //   fogDensityPerCurse (how fast fog ramps with curse).
+    // SAFE RANGE: 0.0-0.01.
+    fogDensityStart: 0.0,
+
+    // Baseline fog density once curseFactor > 0.15. The actual fog density
+    // at any moment is: fogDensityBase + curseFactor × fogDensityPerCurse.
+    // This is the floor that fog never drops below once the curse kicks in.
+    // INCREASE: thicker baseline fog during the curse phase.
+    // DECREASE: clearer during curse, monsters harder to spot.
+    // INTERACTS WITH: fogDensityStart (used when curse ≤ 0.15),
+    //   fogDensityPerCurse (the per-curse ramp rate).
+    // SAFE RANGE: 0.003-0.015.
+    fogDensityBase: 0.006,
+
+    // How much fog density increases per unit of curseFactor (0..1).
+    // At curse 1.0 (max), fog density = fogDensityBase + 1.0 × this.
+    // Default 0.025 means at full curse, fog is thick enough to barely see
+    // 20-30 units ahead — monsters emerge from the haze.
+    // INCREASE: fog ramps up faster as you collect cubes, scarier but
+    //   harder to navigate.
+    // DECREASE: fog stays thinner even at full curse, more visible but
+    //   less atmospheric.
+    // INTERACTS WITH: fogDensityBase (the floor), curseFactor (0..1).
+    // SAFE RANGE: 0.01-0.04.
+    fogDensityPerCurse: 0.025,
+
+    // Sky color at curseFactor = 0 (start of run). Lerps toward
+    // skyColorEnd as curse builds.
+    // 0x87ceeb = standard sky blue (#87CEEB).
+    // Use any hex color. 0x000000 = black, 0xffffff = white.
+    // INTERACTS WITH: skyColorEnd (the curse-phase sky color),
+    //   brightnessMult (scales both endpoints).
+    // SAFE RANGE: any valid hex color.
+    skyColorStart: 0x87ceeb,
+
+    // Sky color at curseFactor = 1.0 (max curse). The sky lerps from
+    // skyColorStart to this as cubes are collected.
+    // 0x440000 = dark blood red — the classic "the world is ending" look.
+    // INCREASE (toward red): more hellish end-game sky.
+    // DECREASE (toward black): darker, more oppressive end-game.
+    // INTERACTS WITH: skyColorStart (the starting sky color),
+    //   brightnessMult (scales both endpoints).
+    // SAFE RANGE: any valid hex color.
+    skyColorEnd: 0x440000,
+
+    // Global brightness multiplier applied to sky color, ground color,
+    // ambient light, and sun light. 1.0 = no change.
+    // INCREASE: the whole scene gets brighter (useful if your monitor is
+    //   dark or you want a more vibrant look).
+    // DECREASE: the whole scene gets darker, more horror atmosphere.
+    //   - At 0.5, the game is noticeably dimmer.
+    //   - At 0, everything is black (don't do this).
+    // INTERACTS WITH: skyColorStart/End (scales the lerped sky color),
+    //   ambientLightStart/End (scales light intensity),
+    //   sunLightStart/End (scales light intensity).
+    // SAFE RANGE: 0.5-1.5.
+    brightnessMult: 1.0,
+
+    // Ambient light intensity at curseFactor = 0 (start of run).
+    // Ambient light is the omnidirectional fill light that prevents
+    // unlit surfaces from being pure black. Lerps toward ambientLightEnd
+    // as curse builds.
+    // INCREASE: brighter start, everything more visible.
+    // DECREASE: darker start, more shadowy and atmospheric.
+    // INTERACTS WITH: ambientLightEnd (curse-phase intensity),
+    //   brightnessMult (scales this).
+    // SAFE RANGE: 0.5-1.5.
+    ambientLightStart: 1.0,
+
+    // Ambient light intensity at curseFactor = 1.0 (max curse).
+    // Default 0.25 — the world gets darker and more oppressive as the
+    // curse builds, making it harder to see monsters in the fog.
+    // INCREASE: brighter end-game, easier to see at full curse.
+    // DECREASE: darker end-game, scarier but harder to play.
+    //   - At 0, unlit surfaces are pure black at full curse.
+    // INTERACTS WITH: ambientLightStart (starting intensity),
+    //   brightnessMult (scales this).
+    // SAFE RANGE: 0.1-0.5.
+    ambientLightEnd: 0.25,
+
+    // Sun (directional) light intensity at curseFactor = 0 (start of run).
+    // The sun light provides the primary directional shading on platforms
+    // and obstacles. Lerps toward sunLightEnd as curse builds.
+    // INCREASE: stronger directional shading, more contrast on surfaces.
+    // DECREASE: flatter lighting, less depth perception.
+    // INTERACTS WITH: sunLightEnd (curse-phase intensity),
+    //   brightnessMult (scales this).
+    // SAFE RANGE: 0.8-1.5.
+    sunLightStart: 1.2,
+
+    // Sun (directional) light intensity at curseFactor = 1.0 (max curse).
+    // Default 0.1 — the sun nearly dies at full curse, leaving only the
+    // dim ambient light and the red sky glow. This is what makes the
+    // end-game feel like the world is ending.
+    // INCREASE: more directional shading at full curse, easier to see
+    //   platform edges.
+    // DECREASE: darker end-game, platforms fade into silhouette.
+    //   - At 0, no directional light at all at full curse — everything is
+    //     flat-lit by ambient only.
+    // INTERACTS WITH: sunLightStart (starting intensity),
+    //   brightnessMult (scales this).
+    // SAFE RANGE: 0.05-0.3.
+    sunLightEnd: 0.1,
 };

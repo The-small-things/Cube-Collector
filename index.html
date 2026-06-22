@@ -198,6 +198,15 @@
         }
         #ability-bar-bg { width: 100%; height: 6px; background: rgba(255,255,255,0.1); margin-top: 6px; border-radius: 3px; overflow: hidden; }
         #ability-bar-fill { width: 100%; height: 100%; background: #00ffff; transition: width 0.1s linear; }
+        #power-dive-ui {
+            position: fixed; bottom: 64px; right: 18px;
+            color: #fff; font-family: monospace; font-size: 12px;
+            background: rgba(40,0,0,0.75); padding: 6px 12px; border-radius: 4px;
+            z-index: 10; border: 1px solid #ff5500; min-width: 130px; text-align: right;
+            box-shadow: 0 0 8px rgba(255,85,0,0.4);
+        }
+        #power-dive-bar-bg { width: 100%; height: 5px; background: rgba(255,255,255,0.1); margin-top: 5px; border-radius: 3px; overflow: hidden; }
+        #power-dive-bar-fill { width: 100%; height: 100%; background: #ff5500; transition: width 0.1s linear; box-shadow: 0 0 8px #ff5500; }
         #leaderboard-menu .lb-row { display:flex; justify-content:space-between; padding:5px 0; border-bottom:1px solid #300; font-size:13px; }
         #leaderboard-menu .lb-tab { background:#000; border:1px solid #555; color:#888; cursor:pointer; font-family:monospace; font-size:10px; padding:5px 10px; }
         #leaderboard-menu .lb-tab.active { border-color:#ff0000; color:#ff0000; }
@@ -211,6 +220,10 @@
 <div id="ability-ui">
     <span id="ability-label">FLARE [Q] — READY</span>
     <div id="ability-bar-bg"><div id="ability-bar-fill"></div></div>
+</div>
+<div id="power-dive-ui">
+    <span id="power-dive-label">DIVE [V] — READY</span>
+    <div id="power-dive-bar-bg"><div id="power-dive-bar-fill"></div></div>
 </div>
 <div id="run-timer" style="display:none; position:fixed; top:14px; left:50%; transform:translateX(-50%); z-index:10; color:#fff; font-family:monospace; font-size:18px; background:rgba(0,0,0,0.6); padding:6px 16px; border-radius:4px; border:1px solid #444; letter-spacing:1px;">
     <span id="run-timer-label">TIME</span> <span id="run-timer-value">0:00.0</span><span id="run-timer-mult" style="display:none; margin-left:8px; color:#666; font-size:14px;">×1.00</span>
@@ -456,9 +469,10 @@ window.quickRestart = (...a) => quickRestart(...a);
 // =====================================================================
 const TUNING = {
     // --- 1. CORE MOVEMENT ---
-    gravity: 24.0,              // downward acceleration (u/s²)
+    gravity: 40.0,              // downward acceleration (u/s²)
     wallGravity: 3.5,           // gentler gravity while wall-running
     moveSpeed: 10.0,            // base wish speed (u/s) — sprint multiplies this
+    airMoveSpeed: 2,          // base air wish-speed cap (u/s) — air-equivalent of moveSpeed. Tiny value is what makes strafe-jumping work (holding W adds almost nothing, but A/D + mouse turn redirects wishDir so the cap applies to a new direction and ADDS to total speed). Increase = easier air movement but weaker strafe-jump tech; decrease = harder air control but purer strafe-jump gains.
     sprintMult: 2.7,            // target sprint multiplier on wish speed
     sprintRampRate: 12.0,       // how fast sprint multiplier ramps up (per sec)
     sprintDecayRate: 8.0,       // how fast sprint multiplier decays on ground (per sec)
@@ -487,9 +501,9 @@ const TUNING = {
     // --- 4. ACCELERATION (Quake/Source-style) ---
     groundAccel: 14.0,          // ground acceleration rate
     groundFriction: 6.0,        // ground friction when no input (higher = stops faster)
-    airAccel: 90.0,             // air acceleration (high, but capped by airSpeedCap)
-    airSpeedCap: 1.6,           // max wish-speed that air-accel can add (strafe-jump tech)
-    airSpeedSprintMult: 1.6,    // airSpeedCap multiplier while sprinting
+    airAccel: 90.0,             // air acceleration (high, but capped by airMoveSpeed — see CORE MOVEMENT)
+    airSpeedCap: 1.6,           // (DEPRECATED legacy alias for airMoveSpeed — kept for backwards compat with saved configs)
+    airSpeedSprintMult: 1.6,    // airMoveSpeed multiplier while sprinting
     airSpeedLimit: 75.0,        // hard cap on total air speed (momentum preserved below)
 
     // --- 5. GROUND STEERING ("W follows camera") ---
@@ -513,6 +527,19 @@ const TUNING = {
     slideDecayExponent: 1.2,    // lower = holds speed longer before tailing off
     diveSlamSpeed: -26.0,       // initial downward velocity on air-dive (Grace slam)
     diveGravityMult: 1.9,       // gravity multiplier while dive-sliding
+
+    // --- 7b. POWER DIVE (heavy slam, separate from slide-dive) ---
+    // A dedicated ability on its own key (default V). Only fires when airborne.
+    // Hits MUCH harder than the regular air-dive: ~2.1x the slam speed and a
+    // steeper gravity multiplier so the player is yanked down. On landing it
+    // fires an impact frame + camera shake for the anime "ground pound" feel.
+    powerDiveSlamSpeed: -55.0,  // initial downward velocity (vs -26 for regular dive)
+    powerDiveGravityMult: 3.0,  // gravity multiplier while power-diving (vs 1.9)
+    powerDiveForwardBoost: 30.0,// small forward boost along look dir (preserves momentum)
+    powerDiveCooldown: 3.0,     // cooldown (s) — short so it chains, long enough to not spam
+    powerDiveMinAirTime: 0.05, // min air time before allowing (s) — prevents insta-trigger on jump edge
+    powerDiveLaunchSpeed: 50.0, // upward velocity applied on power-dive landing (bounce back up)
+    diveLaunchSpeed: 10.0,      // upward velocity applied on regular air-dive landing (smaller bounce)
 
     // --- 8. CUBE PARRY FLING ---
     parryBase: 55.0,            // base launch magnitude
@@ -546,8 +573,8 @@ const TUNING = {
     machPulseMax: 0.15,         // max text scale pulse at full speed
 
     // --- 12. CAMERA BOB ---
-    bobAmountY: 0.06,           // vertical head bob amplitude
-    bobAmountX: 0.04,           // horizontal head bob amplitude
+    bobAmountY: 0.08,           // vertical head bob amplitude
+    bobAmountX: 0.05,           // horizontal head bob amplitude
     slideCameraDrop: -0.2,      // camera Y offset while sliding
 
     // --- 13. PLAYER ---
@@ -1647,6 +1674,93 @@ function triggerSonicBoom(pos) {
     playTone(60, 'sawtooth', 0.5, 0.2, 20); // Bass drop
 }
 
+// ===================== DIVE IMPACT: RADIAL LIGHTNING =====================
+// Fired when the player slams into a platform/ground from a dive (regular
+// or power dive). Spawns a burst of jagged red+black "lightning" lines
+// radiating outward from the impact point, flat against the ground, that
+// quickly expand and fade — replaces the old on-screen "POWER DIVE!" text
+// with a grounded, physical-feeling impact effect.
+const diveImpacts = [];
+function _buildBoltRibbon(pts, widthFn, color, opts = {}) {
+    // Builds a flat triangle-strip "ribbon" mesh that follows pts, with a
+    // width at each point given by widthFn(t). This is how we fake a THICK
+    // lightning bolt — THREE.Line ignores linewidth in WebGL, but a ribbon
+    // mesh can be as thick as we want and tapers naturally toward the tip.
+    const positions = [];
+    const indices = [];
+    const n = pts.length;
+    for (let i = 0; i < n; i++) {
+        const t = i / (n - 1);
+        // Perpendicular direction (in the XZ plane) to the bolt's local travel dir.
+        const prev = pts[Math.max(0, i - 1)];
+        const next = pts[Math.min(n - 1, i + 1)];
+        let dx = next.x - prev.x, dz = next.z - prev.z;
+        const len = Math.hypot(dx, dz) || 1;
+        dx /= len; dz /= len;
+        const px = -dz, pz = dx; // perpendicular
+        const w = widthFn(t);
+        positions.push(pts[i].x + px * w, 0, pts[i].z + pz * w);
+        positions.push(pts[i].x - px * w, 0, pts[i].z - pz * w);
+    }
+    for (let i = 0; i < n - 1; i++) {
+        const a = i * 2, b = i * 2 + 1, c = i * 2 + 2, d = i * 2 + 3;
+        indices.push(a, b, c, b, d, c);
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    geo.setIndex(indices);
+    const mat = new THREE.MeshBasicMaterial({
+        color,
+        transparent: true,
+        opacity: 1,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+        blending: opts.additive ? THREE.AdditiveBlending : THREE.NormalBlending
+    });
+    return new THREE.Mesh(geo, mat);
+}
+
+function triggerDiveImpact(pos, intensity = 1) {
+    if (particleEffectsLevel === 'off') return;
+
+    const group = new THREE.Group();
+    group.position.copy(pos);
+    group.position.y += 0.05; // sit just above the ground to avoid z-fighting
+
+    const boltCount = particleEffectsLevel === 'low' ? 6 : 10;
+    for (let i = 0; i < boltCount; i++) {
+        const angle = (i / boltCount) * Math.PI * 2 + Math.random() * 0.3;
+
+        // Build a jagged lightning-bolt path radiating outward from center.
+        const segCount = 5 + Math.floor(Math.random() * 3);
+        const len = (1.5 + Math.random() * 1.3) * intensity;
+        const dirX = Math.cos(angle), dirZ = Math.sin(angle);
+        const pts = [];
+        for (let s = 0; s <= segCount; s++) {
+            const t = s / segCount;
+            const jitter = (Math.random() - 0.5) * 0.4 * (1 - t * 0.5);
+            const px = dirX * len * t + (-dirZ * jitter);
+            const pz = dirZ * len * t + (dirX * jitter);
+            pts.push(new THREE.Vector3(px, 0, pz));
+        }
+
+        // One Piece "red lightning" look: a wide, glowing red outer bolt
+        // with a thin black core burned through the middle — taper both
+        // toward the tip so it reads as a jagged crack rather than a blob.
+        const baseW = (0.16 + Math.random() * 0.08) * intensity;
+        const redRibbon = _buildBoltRibbon(pts, t => baseW * (1 - t * 0.65), 0xff1100, { additive: true });
+        const blackRibbon = _buildBoltRibbon(pts, t => baseW * 0.4 * (1 - t * 0.7), 0x000000, { additive: false });
+        redRibbon.renderOrder = 1;
+        blackRibbon.renderOrder = 2; // draw the black core on top of the red glow
+        group.add(redRibbon);
+        group.add(blackRibbon);
+    }
+
+    group.userData.life = 0;
+    scene.add(group);
+    diveImpacts.push(group);
+}
+
 function createStalker() {
     // === THE STALKER ===
     // A tall, gaunt, multi-limbed horror: elongated torso, skull-like head,
@@ -2033,10 +2147,12 @@ let difficulty = localStorage.getItem('redCubeDifficulty') || 'normal';
 let playerName = localStorage.getItem('redCubeName') || '';
 
 const DIFFICULTY_SETTINGS = {
-    easy:      { monsterThreshold: 15, speedMult: 0.8,  catchMult: 0.8,  houndCount: 1 },
-    normal:    { monsterThreshold: 15, speedMult: 1.0,  catchMult: 1.0,  houndCount: 1 },
-    hard:      { monsterThreshold: 15, speedMult: 1.25, catchMult: 1.1,  houndCount: 2 },
-    nightmare: { monsterThreshold: 15, speedMult: 1.6,  catchMult: 1.25, houndCount: 3 }
+    // houndAccelMult: scales how fast Hounds build speed (higher diff = faster accel)
+    // stalkerSpeedMult: extra base-speed multiplier for Stalkers (stacks on top of speedMult)
+    easy:      { monsterThreshold: 15, speedMult: 0.8,  catchMult: 0.8,  houndCount: 1, houndAccelMult: 0.9, stalkerSpeedMult: 0.85 },
+    normal:    { monsterThreshold: 15, speedMult: 1.0,  catchMult: 1.0,  houndCount: 1, houndAccelMult: 1.25, stalkerSpeedMult: 1.05 },
+    hard:      { monsterThreshold: 15, speedMult: 1.25, catchMult: 1.1,  houndCount: 2, houndAccelMult: 1.7, stalkerSpeedMult: 1.35 },
+    nightmare: { monsterThreshold: 15, speedMult: 1.6,  catchMult: 1.25, houndCount: 3, houndAccelMult: 2.3, stalkerSpeedMult: 1.8 }
 };
 
 let MONSTER_THRESHOLD = (gameMode === 'survival') ? 0 : 15;
@@ -2069,7 +2185,7 @@ function updateModeDiffUI() {
         : 'Collect all 20 red cubes';
     const modeNote = gameMode === 'timeattack' ? ' — fastest time wins' : (gameMode === 'survival' ? ' — they are awake from the start' : '');
     document.getElementById('binds-text').innerHTML =
-        `${formatBind(keyMapping.forward)}/${formatBind(keyMapping.left)}/${formatBind(keyMapping.backward)}/${formatBind(keyMapping.right)} — Move &nbsp;|&nbsp; ${formatBind(keyMapping.jump)} — Jump &nbsp;|&nbsp; ${formatBind(keyMapping.sprint)} — Sprint &nbsp;|&nbsp; Ctrl — Slide/Dive &nbsp;|&nbsp; ${formatBind(keyMapping.ability)} — Flare<br>${goalText}${modeNote}<br>Follow the golden beacons<br><br><span style="color:#888; font-size:10px;">slide-jump preserves momentum · air-strafe (A/D + mouse) to build speed · wall-jumps refresh in air</span><br><br><span style="color:#555; font-size:11px;">something is out there. don't worry about it.</span>`;
+        `${formatBind(keyMapping.forward)}/${formatBind(keyMapping.left)}/${formatBind(keyMapping.backward)}/${formatBind(keyMapping.right)} — Move &nbsp;|&nbsp; ${formatBind(keyMapping.jump)} — Jump &nbsp;|&nbsp; ${formatBind(keyMapping.sprint)} — Sprint &nbsp;|&nbsp; Ctrl — Slide/Dive &nbsp;|&nbsp; ${formatBind(keyMapping.ability)} — Flare &nbsp;|&nbsp; ${formatBind(keyMapping.powerDive)} — Power Dive<br>${goalText}${modeNote}<br>Follow the golden beacons<br><br><span style="color:#888; font-size:10px;">slide-jump preserves momentum · air-strafe (A/D + mouse) to build speed · wall-jumps refresh in air · Power Dive (V) slams down harder than a slide-dive</span><br><br><span style="color:#555; font-size:11px;">something is out there. don't worry about it.</span>`;
 }
 
 // ===================== LEADERBOARD =====================
@@ -2284,6 +2400,57 @@ function useAbility() {
         }
     }
     showCurseMsg('FLARE DEPLOYED', 1200);
+}
+
+// ===================== ABILITY: POWER DIVE =====================
+// A dedicated heavy-slam dive on its own key (default V). Distinct from the
+// regular slide-dive (which is just "press Ctrl while airborne" and gives a
+// -26 u/s slam). The power dive fires a much harder -55 u/s slam, applies a
+// steeper gravity multiplier while active, and triggers an impact frame +
+// camera shake on landing for the anime "ground pound" feel.
+//
+// Constraints:
+//   - Only fires when airborne (grounded press does nothing — you can still
+//     regular-slide on the ground via Ctrl).
+//   - Enforces a tiny min-air-time so jump + V in the same frame doesn't
+//     instantly waste the dive into the floor.
+//   - Cooldown is short (default 1.5s) so it chains naturally with jumps and
+//     slides, but long enough that you can't spam it to fly.
+//   - Cancelled automatically on landing, wall-run, or jump.
+function usePowerDive() {
+    if (!gameStarted || gameEnded || isJumpscareActive) return;
+    if (isFlying) return;
+    if (isGrounded) return;                  // can only dive from the air
+    if (isWallRunning) return;               // wall-run takes precedence
+    if (isPowerDiving) return;               // already diving
+    if (powerDiveCooldownTimer > 0) return;  // on cooldown
+    if (powerDiveAirTimeTracker < TUNING.powerDiveMinAirTime) return; // just left ground — too soon
+
+    isPowerDiving = true;
+    powerDiveCooldownTimer = TUNING.powerDiveCooldown;
+
+    // Hard downward slam — ~2.1x stronger than the regular air-dive's -26.
+    velocity.y = TUNING.powerDiveSlamSpeed;
+
+    // Small forward boost along look direction so the dive preserves momentum
+    // and feels like a deliberate "commit" rather than just dropping.
+    const fwd = new THREE.Vector3(0, 0, -1).applyAxisAngle(Y_AXIS, yaw).normalize();
+    const curHSpeed = Math.hypot(velocity.x, velocity.z);
+    // Only add the boost; never replace existing horizontal momentum (so a
+    // Mach-3 power-dive keeps its speed instead of being clipped to 18 u/s).
+    velocity.x += fwd.x * TUNING.powerDiveForwardBoost;
+    velocity.z += fwd.z * TUNING.powerDiveForwardBoost;
+
+    // Cancel any in-flight slide so the two states don't fight over gravity.
+    if (isSliding) {
+        isSliding = false;
+        isDive = false;
+        slideCooldownTimer = SLIDE_COOLDOWN;
+    }
+
+    // Audio + UI feedback. The rumble is lower/longer than the regular slide
+    // noise so the power dive audibly hits harder.
+    playNoise(0.45, 0.18, 28);
 }
 
 
@@ -2564,7 +2731,8 @@ let keyMapping = {
     jump: 'Space',
     sprint: 'ShiftLeft',
     slide: 'ControlLeft',
-    ability: 'KeyQ'
+    ability: 'KeyQ',
+    powerDive: 'KeyV'
 };
 
 const actionLabels = {
@@ -2575,7 +2743,8 @@ const actionLabels = {
     jump: 'Jump',
     sprint: 'Sprint',
     slide: 'Slide / Crouch',
-    ability: 'Flare Ability'
+    ability: 'Flare Ability',
+    powerDive: 'Power Dive'
 };
 
 function loadKeybinds() {
@@ -2587,7 +2756,8 @@ function loadKeybinds() {
         jump: 'Space',
         sprint: 'ShiftLeft',
         slide: 'ControlLeft',
-        ability: 'KeyQ'
+        ability: 'KeyQ',
+        powerDive: 'KeyV'
     };
     
     const saved = localStorage.getItem('redCubeBinds');
@@ -2734,6 +2904,10 @@ function setParticleEffects(level) {
             scene.remove(sonicBooms[i]);
             sonicBooms.splice(i, 1);
         }
+        for (let i = diveImpacts.length - 1; i >= 0; i--) {
+            scene.remove(diveImpacts[i]);
+            diveImpacts.splice(i, 1);
+        }
     }
     updateAdvancedUI();
     saveKeybinds();
@@ -2800,7 +2974,8 @@ function resetToDefaults() {
         jump: 'Space',
         sprint: 'ShiftLeft',
         slide: 'ControlLeft',
-        ability: 'KeyQ'
+        ability: 'KeyQ',
+        powerDive: 'KeyV'
     };
     mouseSensitivity = 1.0;
     masterVolume = 1.0;
@@ -3014,6 +3189,20 @@ let slideTimer = 0;
 let slideCooldownTimer = 0;
 let cubeBoostTimer = 0;
 let slideDirection = new THREE.Vector3();
+
+// Power Dive variables (separate ability — heavy ground-pound slam)
+// isPowerDiving: true while the player is in the dedicated power-dive state
+//   (set on key press, cleared on landing / jump / wall-run). While true the
+//   gravity multiplier is boosted so the player is yanked down harder than
+//   even a regular air-dive.
+// powerDiveCooldownTimer: counts down from TUNING.powerDiveCooldown after use.
+//   Ability can't be re-triggered until it hits 0.
+// powerDiveAirTimeTracker: counts up while airborne so we can enforce a small
+//   min-air-time before allowing the dive (prevents accidental insta-trigger
+//   when tapping jump + V in the same frame).
+let isPowerDiving = false;
+let powerDiveCooldownTimer = 0;
+let powerDiveAirTimeTracker = 0;
 const SLIDE_DURATION = TUNING.slideDuration;
 const SLIDE_INITIAL_SPEED = TUNING.slideInitialSpeed; // legacy alias used elsewhere in code
 const SLIDE_COOLDOWN = TUNING.slideCooldown;
@@ -3032,6 +3221,7 @@ let debugStructureMarkers = [];
 const GRAVITY = TUNING.gravity;
 const WALL_GRAVITY = TUNING.wallGravity;
 const MOVE_SPEED = TUNING.moveSpeed;
+const AIR_MOVE_SPEED = TUNING.airMoveSpeed; // base air wish-speed cap (air-equivalent of moveSpeed)
 const SPRINT_MULT = TUNING.sprintMult;
 const JUMP_FORCE = TUNING.jumpForce;
 const WALL_JUMP_FORCE_UP = TUNING.wallJumpForceUp;
@@ -3039,7 +3229,10 @@ const WALL_JUMP_FORCE_SIDE = TUNING.wallJumpForceSide;
 const GROUND_ACCEL = TUNING.groundAccel;
 const GROUND_FRICTION = TUNING.groundFriction;
 const AIR_ACCEL = TUNING.airAccel;
-const AIR_SPEED_CAP = TUNING.airSpeedCap;
+// AIR_SPEED_CAP is a backwards-compat alias for AIR_MOVE_SPEED. New code
+// should use AIR_MOVE_SPEED; this is kept so any external references
+// (or saved TUNING configs that only set airSpeedCap) still work.
+const AIR_SPEED_CAP = (TUNING.airSpeedCap !== undefined) ? TUNING.airSpeedCap : AIR_MOVE_SPEED;
 const AIR_SPEED_LIMIT = TUNING.airSpeedLimit;
 const SLIDE_FRICTION = TUNING.slideFriction;
 const SLIDE_INITIAL_SPEED_OVERRIDE = TUNING.slideInitialSpeed;
@@ -3312,6 +3505,10 @@ function quickRestart() {
 
     // Reset ability
     abilityCooldownTimer = 0;
+    // Reset power dive state
+    isPowerDiving = false;
+    powerDiveCooldownTimer = 0;
+    powerDiveAirTimeTracker = 0;
 
     // Reset keys
     keys.w = false;
@@ -3562,6 +3759,7 @@ document.addEventListener('keydown', e => {
     if(e.code === keyMapping.right) keys.d=true;
     if(e.code === keyMapping.jump) { e.preventDefault(); keys.space=true; if (!e.repeat) jumpBufferTimer = JUMP_BUFFER_TIME; }
     if(e.code === keyMapping.ability) useAbility();
+    if(e.code === keyMapping.powerDive && !e.repeat) usePowerDive();
     
     // Special handling for modifiers to allow both Left/Right versions if not explicitly rebound
     if(e.code === keyMapping.sprint || (keyMapping.sprint === 'ShiftLeft' && e.code === 'ShiftRight')) keys.shift=true;
@@ -3848,7 +4046,8 @@ function applyGravityAndFlight(dt) {
         if (velocity.y < TUNING.wallRunMaxFallSpeed) velocity.y = TUNING.wallRunMaxFallSpeed;
     } else if (!isGrounded) {
         let gravityMult = 1.0;
-        if (isSliding && isDive) gravityMult = TUNING.diveGravityMult; // Dives slam down harder (Grace slam)
+        if (isPowerDiving) gravityMult = TUNING.powerDiveGravityMult; // Power dive slams down hardest
+        else if (isSliding && isDive) gravityMult = TUNING.diveGravityMult; // Dives slam down harder (Grace slam)
         // Variable jump height: if the player releases jump early while rising,
         // cut upward velocity. Lets you do tiny hops vs. full jumps by tap-vs-hold.
         if (velocity.y > TUNING.variableJumpCutoffVel && !keys.space) gravityMult *= TUNING.variableJumpGravityMult;
@@ -4078,17 +4277,17 @@ function updateHorizontalVelocity(dt) {
         }
     } else {
         // AIR: Quake/Source-style air strafing. The cap on wishSpeed is the
-        // magic — AIR_SPEED_CAP is tiny (1.6), so holding W alone barely
+        // magic — AIR_MOVE_SPEED is tiny (1.6), so holding W alone barely
         // adds speed. But if you press A/D and turn the mouse, your wishDir
         // is now perpendicular to your velocity, so currentSpeed (projection
         // onto wishDir) is near zero — and accelerate() can add the full
-        // AIR_SPEED_CAP worth of speed in that new direction, INCREASING your
+        // AIR_MOVE_SPEED worth of speed in that new direction, INCREASING your
         // total velocity vector magnitude. That's a strafe jump.
         if (hasInput) {
-            // In the air, wishspeed is capped at AIR_SPEED_CAP — UNLESS
+            // In the air, wishspeed is capped at AIR_MOVE_SPEED — UNLESS
             // we're sliding-launching (preservedSlideSpeed > 0) in which
             // case we let the slide's speed ride along.
-            let airWishSpeed = AIR_SPEED_CAP * speedMult;
+            let airWishSpeed = AIR_MOVE_SPEED * speedMult;
             // Higher cap while sprinting in air so air-strafe gains are
             // more generous when sprinting.
             if (keys.shift) airWishSpeed *= TUNING.airSpeedSprintMult;
@@ -4184,6 +4383,9 @@ function updateWallRunDetection(dt) {
             // can chain wall-jumps across multiple walls.
             velocity.y = Math.max(velocity.y, TUNING.wallRunPopVel);
             canDoubleJump = true;
+            // Wall-run overrides power dive — cancel the dive state so the
+            // boosted gravity multiplier doesn't fight the wall-run gravity.
+            isPowerDiving = false;
             playJump();
         }
         isWallRunning = true;
@@ -4210,6 +4412,11 @@ function handleJumpInput(dt) {
     if (isFlying) return;
     const wantsJump = jumpBufferTimer > 0;
     if (!wantsJump) return;
+
+    // Jumping cancels a power dive — once you commit upward velocity the dive
+    // state is no longer meaningful, so clear it so the boosted gravity
+    // multiplier doesn't yank you back down mid-jump.
+    if (isPowerDiving) isPowerDiving = false;
 
     const groundedJumpAvailable = isGrounded || coyoteTimer > 0;
     // Triple jump is available when at Mach 4+ horizontal speed AND the
@@ -4571,6 +4778,31 @@ function animate() {
         document.getElementById('ability-bar-fill').style.width = '100%';
         document.getElementById('ability-label').textContent = `FLARE [${formatBind(keyMapping.ability)}] — READY`;
     }
+
+    // Power dive cooldown + air-time tracker + UI bar update.
+    // air-time tracker: counts up while airborne so usePowerDive() can enforce
+    // a tiny min-air-time before allowing the dive (prevents accidental
+    // insta-trigger when jump + V are pressed in the same frame).
+    if (!isGrounded && !isFlying) {
+        powerDiveAirTimeTracker += dt;
+    } else {
+        powerDiveAirTimeTracker = 0;
+    }
+    if (powerDiveCooldownTimer > 0) {
+        powerDiveCooldownTimer = Math.max(0, powerDiveCooldownTimer - dt);
+        const pdPct = (powerDiveCooldownTimer / TUNING.powerDiveCooldown) * 100;
+        const pdFill = document.getElementById('power-dive-bar-fill');
+        const pdLabel = document.getElementById('power-dive-label');
+        if (pdFill) pdFill.style.width = (100 - pdPct) + '%';
+        if (pdLabel) pdLabel.textContent = `DIVE [${formatBind(keyMapping.powerDive)}] — ${powerDiveCooldownTimer.toFixed(1)}s`;
+    } else {
+        const pdFill = document.getElementById('power-dive-bar-fill');
+        const pdLabel = document.getElementById('power-dive-label');
+        if (pdFill) pdFill.style.width = '100%';
+        if (pdLabel && pdLabel.textContent.indexOf('READY') === -1) {
+            pdLabel.textContent = `DIVE [${formatBind(keyMapping.powerDive)}] — READY`;
+        }
+    }
     if (cubeBoostTimer > 0) cubeBoostTimer -= dt;
 
     if (droneTimer > 4.0 && curseFactor > 0.25) {
@@ -4678,7 +4910,35 @@ function animate() {
     // On landing: refresh double-jump eligibility (handled by canDoubleJump=false here
     // so the NEXT grounded jump will set it back to true). isSlideJump flag reset.
     // Horizontal momentum is preserved automatically — landing only zeros velocity.y.
-    if (!isFlying && isGrounded && !wasGroundedLastFrame) { playLand(); canDoubleJump = false; isSlideJump = false; }
+    if (!isFlying && isGrounded && !wasGroundedLastFrame) {
+        playLand();
+        canDoubleJump = false;
+        isSlideJump = false;
+        // Dive landing: fire an impact frame + camera shake for the anime
+        // "ground pound" punch, spawn a radial red/black lightning burst at
+        // the impact point, then launch the player back upward. Power dive
+        // hits harder/launches higher than a regular slide-dive.
+        if (isPowerDiving) {
+            triggerImpactFrame({
+                color: '#ff5500',
+                duration: 280,
+                hitstop: 70,
+                shake: true,
+                flat: false // keep the 3D scene visible — flat mode would hide the landing
+            });
+            triggerDiveImpact(player.position.clone(), 1.6);
+            playNoise(0.5, 0.22, 22); // deep thud on impact
+            isPowerDiving = false;
+            isGrounded = false; // launching back up — not resting on the ground
+            velocity.y = TUNING.powerDiveLaunchSpeed;
+        } else if (isSliding && isDive) {
+            // Regular air-dive landing — smaller lightning burst + smaller launch.
+            triggerDiveImpact(player.position.clone(), 1.0);
+            isGrounded = false;
+            velocity.y = TUNING.diveLaunchSpeed;
+            isDive = false;
+        }
+    }
 
     // Camera bobbing — amplitudes come from TUNING.bobAmount{Y,X} and the
     // slide camera drop from TUNING.slideCameraDrop.
@@ -4931,12 +5191,14 @@ function animate() {
                 // to how sharply it has to turn. This makes it terrifying in
                 // open terrain but weaker when the player jukes around
                 // obstacles or cuts hard.
-                const HOUND_ACCEL_BASE    = 7.0;   // units/sec² baseline accel when aligned
-                const HOUND_ACCEL_SPEED   = 0.55;  // extra accel per unit of current speed (opens up at speed)
+                const HOUND_ACCEL_BASE    = 12.0;  // units/sec² baseline accel when aligned (was 7.0 — Hounds now wind up much faster)
+                const HOUND_ACCEL_SPEED   = 0.95;  // extra accel per unit of current speed (was 0.55 — opens up harder at speed)
                 const HOUND_DECEL_PER_RAD = 18.0;  // units/sec lost per radian of heading error
                 const HOUND_SPEED_MIN     = 2.5;
                 const HOUND_SPEED_MAX_BASE = 12.0; // top speed before difficulty mult
                 const HOUND_TURN_RATE     = 3.2;   // rad/sec — how fast heading can rotate
+                // Difficulty-scaled acceleration: harder diffs = Hounds snap to top speed faster.
+                const HOUND_ACCEL_MULT    = (diffSettings.houndAccelMult != null) ? diffSettings.houndAccelMult : 1.0;
 
                 // Lead-prediction target (always knows where player is going).
                 const predictX = player.position.x + velocity.x * 0.25;
@@ -4958,7 +5220,8 @@ function animate() {
                 let speedDelta;
                 if (angleErr < 0.2) {
                     // Straight-line: accelerate, more aggressively the faster it already goes.
-                    speedDelta = (HOUND_ACCEL_BASE + m.userData.currentSpeed * HOUND_ACCEL_SPEED) * dt;
+                    // Scaled by HOUND_ACCEL_MULT so higher difficulty Hounds wind up faster.
+                    speedDelta = (HOUND_ACCEL_BASE + m.userData.currentSpeed * HOUND_ACCEL_SPEED) * HOUND_ACCEL_MULT * dt;
                 } else {
                     // Turning: lose speed proportional to angle error.
                     speedDelta = -HOUND_DECEL_PER_RAD * angleErr * dt;
@@ -5039,7 +5302,11 @@ function animate() {
                 if (m.userData.lungeCooldown > 0) m.userData.lungeCooldown -= dt;
 
                 // ---- SPEED per state ----
-                const baseSpeed = (MONSTER_SPEED_BASE + curseFactor * 2.5 + m.userData.rage * 3.2) * diffSettings.speedMult;
+                // Stalker base speed now ramps harder with difficulty via stalkerSpeedMult
+                // (stacks on top of the generic speedMult). At higher diffs Stalkers are
+                // noticeably faster out of the gate, before rage/curse even kick in.
+                const STALKER_DIFF_MULT = (diffSettings.stalkerSpeedMult != null) ? diffSettings.stalkerSpeedMult : 1.0;
+                const baseSpeed = (MONSTER_SPEED_BASE + curseFactor * 2.5 + m.userData.rage * 3.2) * diffSettings.speedMult * STALKER_DIFF_MULT;
                 speed = baseSpeed;
                 if (newState === 'wander')      speed *= 0.32;
                 else if (newState === 'stalk')  speed *= 0.62;
@@ -5437,6 +5704,23 @@ function animate() {
         } else {
             b.scale.setScalar(1 + progress * 15);
             b.material.opacity = 1 - progress;
+        }
+    }
+
+    // Update dive-impact lightning bursts — expand outward then fade.
+    for (let i = diveImpacts.length - 1; i >= 0; i--) {
+        const g = diveImpacts[i];
+        g.userData.life += dt;
+        const progress = g.userData.life / 0.45; // 0.45 second duration
+        if (progress >= 1) {
+            scene.remove(g);
+            g.children.forEach(c => { c.geometry.dispose(); c.material.dispose(); });
+            diveImpacts.splice(i, 1);
+        } else {
+            const scale = 1 + progress * 2.2;
+            g.scale.set(scale, 1, scale);
+            const op = 1 - progress;
+            g.children.forEach(c => { c.material.opacity = op; });
         }
     }
 
